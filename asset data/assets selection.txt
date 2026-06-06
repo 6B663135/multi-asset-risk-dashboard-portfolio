@@ -1,0 +1,11 @@
+# I have decided to take ~30 assets across 6 sectors, and optimized the portfolio based off maximum return and minimum risk.
+
+The sectors selected are as follows:
+
+1) Semiconductors - NVIDIA (NVDA), BROADCOM (AVGO), MICRON (MU), AMD, MARVELL (MRVL)
+2) Software (General) - MICROSOFT (MSFT), CROWDSTRIKE (CRWD), SANDKSK (SNDK), TE CONNECTIVITY (TEL), CADENCE DESIGN SYSTEMS (CDNS)
+3) Software (AI-Centric) - SNOWFLAKE (SNOW), SALESFORCE (CRM), CLOUDFLARE (NET), ADOBE (ADBE), SERVICENOW (NOW) 
+4) Data Centres - EQUINIX (EQIX), DLR, VERTIV (VRT), EATON (ETN), IRON MOUNTAIN (IRM)
+5) Utilities - NEXTERA (NEE), CONSTELLATION (CEG), SOUTHERN COMPANY (SO), SEMPRA (SRE)
+6) Defense (National Security) -  LOCKHEED (LMT), RTX, GENERAL DYNAMICS (GD)
+
