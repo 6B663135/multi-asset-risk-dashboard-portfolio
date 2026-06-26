@@ -22,9 +22,37 @@ rolling_period = return_matrix[return_matrix.index.year == 2020].shape[0] # numb
 total_months = return_matrix.groupby(pd.Grouper(freq="ME")).tail(1).index # number of months
 #print ("Total Months:", total_months)
 
+print("No. of rows per rolling period:", rolling_period)
+
 rolling_windows = sum(return_matrix.index.get_loc(date) >= rolling_period 
                       for date in total_months)
 print ("Rolling Windows:", rolling_windows)
+
+# code for Black Litterman Views - 4 in total.
+
+# end of code for Black Litterman Views
+
+rolling_window_count = 0
+
+for i, end_date in enumerate(total_months):
+    end_loc = return_matrix.index.get_loc(end_date)
+    if end_loc < rolling_period:
+        continue
+
+    rolling_window_count += 1
+    rolling_window_returns = return_matrix.iloc[end_loc - rolling_period:end_loc]
+    
+    mean_rolling_returns = rolling_window_returns.mean()
+    rolling_cov_matrix = rolling_window_returns.cov()
+
+    print("Rolling Window Count:", rolling_window_count)
+    print(f"Rolling Window {rolling_window_count}:")
+    print(f"Start Date:{rolling_window_returns.index[0]}")
+    print(f"End Date:{rolling_window_returns.index[-1]}")
+    print("Mean Rolling Returns:\n", mean_rolling_returns)
+    print("Rolling Covariance Matrix:\n", rolling_cov_matrix)
+
+
 
 
 
