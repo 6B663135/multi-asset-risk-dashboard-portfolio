@@ -74,10 +74,30 @@ for i, end_date in enumerate(total_months):
 
     rolling_window_count += 1
     rolling_window_returns = return_matrix.iloc[end_loc - rolling_period:end_loc]
-    
+    rolling_window_end_date = rolling_window_returns.index[-1]
+
     mean_rolling_returns = rolling_window_returns.mean()
     rolling_cov_matrix = rolling_window_returns.cov()
 
+    rolling_benchmark_returns = rolling_window_returns.dot(market_cap_weights)
+
+    annualized_benchmark_returns = rolling_benchmark_returns.mean() * 252
+    annualized_benchmark_volatility = rolling_benchmark_returns.var() * 252
+
+    rolling_risk_free_rate = risk_free["Risk_Free_Rate"].asof(rolling_window_end_date)
+
+    risk_aversion_coefficient = (annualized_benchmark_returns - rolling_risk_free_rate) / annualized_benchmark_volatility
+    risk_aversion_coefficient = max(risk_aversion_coefficient, 1)  # Ensure a minimum value of 1.
+    annualized_rolling_cov_matrix = rolling_cov_matrix * 252
+
+    implied_equilibrium_returns = risk_aversion_coefficient * annualized_rolling_cov_matrix.dot(market_cap_weights)
+
+    print("Rolling Window:", rolling_window_count)
+    print("Window End Date:", rolling_window_end_date)
+    print("Risk Free Rate:", rolling_risk_free_rate)
+    print("Risk Aversion:", risk_aversion_coefficient)
+    print("Implied Equilibrium Returns:\n", implied_equilibrium_returns)
+    #print ("Risk Aversion Coefficient:", risk_aversion_coefficient)
     #print("Rolling Window Count:", rolling_window_count)
     #print(f"Rolling Window {rolling_window_count}:")
     #print(f"Start Date:{rolling_window_returns.index[0]}")
