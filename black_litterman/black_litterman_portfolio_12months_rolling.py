@@ -14,8 +14,39 @@ return_matrix = returns.iloc[:,25:]
 return_matrix.index=returns["Date"]
 return_matrix.index.name = "Date"
 
+asset_list = returns.columns[1:25].str.replace("_Price","").tolist()
+print("Asset List:", asset_list)
+
+# market capitalization list for the assets in asset_list, using yfinance to fetch market cap data
+market_cap_list = []
+for asset in asset_list:
+    market_cap = yf.Ticker(asset).info.get("marketCap", np.nan)
+    market_cap_list.append(market_cap)
+
+print("Market Cap List:", market_cap_list)
+
+# reverse optimization - market capitalizaiton weight for the 24 assets...
+# this is constant for all rolling windows.
+
+market_cap_weights = np.array(market_cap_list) / np.sum(market_cap_list)
+print ("Market Cap Weights:\n", market_cap_weights)
+
 return_matrix = return_matrix.dropna()
 print ("Return Matrix:\n", return_matrix.head())
+
+# risk-free rate taken from the FRB St. Louis FRED database, 3-month Treasury Bill rate
+# this rate will depend on the end date for each rolling period.
+
+risk_free_url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS3MO"
+risk_free = pd.read_csv(risk_free_url, parse_dates=["observation_date"])
+risk_free = risk_free.rename(columns={"observation_date": "Date", "DGS3MO": "Risk_Free_Rate"})
+risk_free = risk_free.set_index("Date")
+risk_free["Risk_Free_Rate"] = risk_free["Risk_Free_Rate"].ffill() / 100
+risk_free = risk_free.reindex(return_matrix.index).ffill()
+#print ("Risk Free Rate:\n", risk_free.head())
+
+benchmark_returns = return_matrix.dot(market_cap_weights)
+#print ("Benchmark Returns:\n", benchmark_returns)
 
 total_rows = return_matrix.shape[0]
 rolling_period = return_matrix[return_matrix.index.year == 2020].shape[0] # number of daily returns
@@ -28,7 +59,9 @@ rolling_windows = sum(return_matrix.index.get_loc(date) >= rolling_period
                       for date in total_months)
 print ("Rolling Windows:", rolling_windows)
 
-# code for Black Litterman Views - 4 in total.
+# code for Black Litterman Views - 5 in total.
+
+
 
 # end of code for Black Litterman Views
 
@@ -45,12 +78,12 @@ for i, end_date in enumerate(total_months):
     mean_rolling_returns = rolling_window_returns.mean()
     rolling_cov_matrix = rolling_window_returns.cov()
 
-    print("Rolling Window Count:", rolling_window_count)
-    print(f"Rolling Window {rolling_window_count}:")
-    print(f"Start Date:{rolling_window_returns.index[0]}")
-    print(f"End Date:{rolling_window_returns.index[-1]}")
-    print("Mean Rolling Returns:\n", mean_rolling_returns)
-    print("Rolling Covariance Matrix:\n", rolling_cov_matrix)
+    #print("Rolling Window Count:", rolling_window_count)
+    #print(f"Rolling Window {rolling_window_count}:")
+    #print(f"Start Date:{rolling_window_returns.index[0]}")
+    #print(f"End Date:{rolling_window_returns.index[-1]}")
+    #print("Mean Rolling Returns:\n", mean_rolling_returns)
+    #print("Rolling Covariance Matrix:\n", rolling_cov_matrix)
 
 
 
