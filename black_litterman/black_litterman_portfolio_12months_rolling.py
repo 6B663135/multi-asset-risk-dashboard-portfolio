@@ -3,6 +3,8 @@ import numpy as np
 import yfinance as yf
 import math
 import os
+from scipy.optimize import minimize
+
 #print(os.getcwd())
 
 '''
@@ -33,6 +35,9 @@ print ("Market Cap Weights:\n", market_cap_weights)
 
 return_matrix = return_matrix.dropna()
 print ("Return Matrix:\n", return_matrix.head())
+
+trading_days_per_month = return_matrix.groupby(pd.Grouper(freq="ME")).size()
+print ("Trading Days per Month:\n", trading_days_per_month)
 
 # risk-free rate taken from the FRB St. Louis FRED database, 3-month Treasury Bill rate
 # this rate will depend on the end date for each rolling period.
@@ -119,7 +124,7 @@ for i, end_date in enumerate(total_months):
 
     posterior_cov_inverse = np.linalg.inv(tau_sigma) + P.T @ np.linalg.inv(rolling_omega) @ P
     posterior_returns = np.linalg.inv(posterior_cov_inverse) @ (np.linalg.inv(tau_sigma) @ implied_equilibrium_returns + P.T @ np.linalg.inv(rolling_omega) @ Q)
-    
+
     #print ("Rolling Omega Matrix:\n", rolling_omega)
     #print("Rolling Window:", rolling_window_count)
     #print("Window End Date:", rolling_window_end_date)
