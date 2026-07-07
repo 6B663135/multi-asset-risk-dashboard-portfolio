@@ -80,6 +80,12 @@ print("Q Vector:\n", Q)
 
 # end of code for Black Litterman Views
 
+tau = 0.035
+confidence_level = 0.50
+confidence_levels = np.full(len(Q), confidence_level)
+print ("Confidence Levels:\n", confidence_levels)
+
+
 rolling_window_count = 0
 
 for i, end_date in enumerate(total_months):
@@ -93,7 +99,8 @@ for i, end_date in enumerate(total_months):
 
     mean_rolling_returns = rolling_window_returns.mean()
     rolling_cov_matrix = rolling_window_returns.cov()
-
+    rolling_standard_deviation = rolling_window_returns.std()
+    
     rolling_benchmark_returns = rolling_window_returns.dot(market_cap_weights)
 
     annualized_benchmark_returns = rolling_benchmark_returns.mean() * 252
@@ -107,11 +114,13 @@ for i, end_date in enumerate(total_months):
 
     implied_equilibrium_returns = risk_aversion_coefficient * annualized_rolling_cov_matrix.dot(market_cap_weights)
 
-    print("Rolling Window:", rolling_window_count)
-    print("Window End Date:", rolling_window_end_date)
-    print("Risk Free Rate:", rolling_risk_free_rate)
-    print("Risk Aversion:", risk_aversion_coefficient)
-    print("Implied Equilibrium Returns:\n", implied_equilibrium_returns)
+    rolling_omega = np.diag(np.diag(P @ (tau * annualized_rolling_cov_matrix) @(P.T))) * (1 - confidence_level) / confidence_level
+    print ("Rolling Omega Matrix:\n", rolling_omega)
+    #print("Rolling Window:", rolling_window_count)
+    #print("Window End Date:", rolling_window_end_date)
+    #print("Risk Free Rate:", rolling_risk_free_rate)
+    #print("Risk Aversion:", risk_aversion_coefficient)
+    #print("Implied Equilibrium Returns:\n", implied_equilibrium_returns)
     #print ("Risk Aversion Coefficient:", risk_aversion_coefficient)
     #print("Rolling Window Count:", rolling_window_count)
     #print(f"Rolling Window {rolling_window_count}:")
