@@ -41,6 +41,8 @@ risk_free_url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS3MO"
 risk_free = pd.read_csv(risk_free_url, parse_dates=["observation_date"])
 risk_free = risk_free.rename(columns={"observation_date": "Date", "DGS3MO": "Risk_Free_Rate"})
 risk_free = risk_free.set_index("Date")
+risk_free["Risk_Free_Rate"] = pd.to_numeric(risk_free["Risk_Free_Rate"], errors='coerce') 
+#avoid non-numeric errors.
 risk_free["Risk_Free_Rate"] = risk_free["Risk_Free_Rate"].ffill() / 100
 risk_free = risk_free.reindex(return_matrix.index).ffill()
 #print ("Risk Free Rate:\n", risk_free.head())
@@ -59,9 +61,22 @@ rolling_windows = sum(return_matrix.index.get_loc(date) >= rolling_period
                       for date in total_months)
 print ("Rolling Windows:", rolling_windows)
 
-# code for Black Litterman Views - 5 in total.
+# code for Black Litterman Views - 4 in total.
 
+def BLO_views(asset_list,view_dict):
+    row=np.zeros(len(asset_list))
+    for asset, weight in view_dict.items():
+        row[asset_list.index(asset)] = weight
+    return row
 
+# adding the 4 views to the matrices P and Q (investor views)
+P = np.array([BLO_views(asset_list, {"NVDA": 1}),
+                BLO_views(asset_list, {"LMT": 1, "MSFT": -1}),
+                BLO_views(asset_list, {"TEL": 1, "MU": -1}),
+                BLO_views(asset_list, {"MRVL": 1})])
+Q = np.array([0.025, 0.01, 0.01, 0.015])
+print("P Matrix:\n", P)
+print("Q Vector:\n", Q)
 
 # end of code for Black Litterman Views
 
@@ -73,7 +88,7 @@ for i, end_date in enumerate(total_months):
         continue
 
     rolling_window_count += 1
-    rolling_window_returns = return_matrix.iloc[end_loc - rolling_period:end_loc]
+    rolling_window_returns = return_matrix.iloc[end_loc - rolling_period + 1:end_loc + 1]
     rolling_window_end_date = rolling_window_returns.index[-1]
 
     mean_rolling_returns = rolling_window_returns.mean()
