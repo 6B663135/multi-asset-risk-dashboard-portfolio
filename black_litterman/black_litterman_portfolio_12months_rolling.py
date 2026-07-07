@@ -104,18 +104,23 @@ for i, end_date in enumerate(total_months):
     rolling_benchmark_returns = rolling_window_returns.dot(market_cap_weights)
 
     annualized_benchmark_returns = rolling_benchmark_returns.mean() * 252
-    annualized_benchmark_volatility = rolling_benchmark_returns.var() * 252
+    annualized_benchmark_variance = rolling_benchmark_returns.var() * 252
 
     rolling_risk_free_rate = risk_free["Risk_Free_Rate"].asof(rolling_window_end_date)
 
-    risk_aversion_coefficient = (annualized_benchmark_returns - rolling_risk_free_rate) / annualized_benchmark_volatility
+    risk_aversion_coefficient = (annualized_benchmark_returns - rolling_risk_free_rate) / annualized_benchmark_variance
     risk_aversion_coefficient = max(risk_aversion_coefficient, 1)  # Ensure a minimum value of 1.
     annualized_rolling_cov_matrix = rolling_cov_matrix * 252
 
     implied_equilibrium_returns = risk_aversion_coefficient * annualized_rolling_cov_matrix.dot(market_cap_weights)
 
     rolling_omega = np.diag(np.diag(P @ (tau * annualized_rolling_cov_matrix) @(P.T))) * (1 - confidence_level) / confidence_level
-    print ("Rolling Omega Matrix:\n", rolling_omega)
+    tau_sigma = tau * annualized_rolling_cov_matrix
+
+    posterior_cov_inverse = np.linalg.inv(tau_sigma) + P.T @ np.linalg.inv(rolling_omega) @ P
+    posterior_returns = np.linalg.inv(posterior_cov_inverse) @ (np.linalg.inv(tau_sigma) @ implied_equilibrium_returns + P.T @ np.linalg.inv(rolling_omega) @ Q)
+    
+    #print ("Rolling Omega Matrix:\n", rolling_omega)
     #print("Rolling Window:", rolling_window_count)
     #print("Window End Date:", rolling_window_end_date)
     #print("Risk Free Rate:", rolling_risk_free_rate)
