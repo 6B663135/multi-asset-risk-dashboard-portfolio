@@ -17,7 +17,9 @@ return_matrix.index=returns["Date"]
 return_matrix.index.name = "Date"
 
 asset_list = returns.columns[1:25].str.replace("_Price","").tolist()
-print("Asset List:", asset_list)
+asset_count = len(asset_list)
+print ("Asset Count:", asset_count)
+#print("Asset List:", asset_list)
 
 # market capitalization list for the assets in asset_list, using yfinance to fetch market cap data
 market_cap_list = []
@@ -25,19 +27,22 @@ for asset in asset_list:
     market_cap = yf.Ticker(asset).info.get("marketCap", np.nan)
     market_cap_list.append(market_cap)
 
-print("Market Cap List:", market_cap_list)
+#print("Market Cap List:", market_cap_list)
 
 # reverse optimization - market capitalizaiton weight for the 24 assets...
 # this is constant for all rolling windows.
 
 market_cap_weights = np.array(market_cap_list) / np.sum(market_cap_list)
-print ("Market Cap Weights:\n", market_cap_weights)
+#print ("Market Cap Weights:\n", market_cap_weights)
 
 return_matrix = return_matrix.dropna()
-print ("Return Matrix:\n", return_matrix.head())
+#print ("Return Matrix:\n", return_matrix.head())
+
+monthly_return_matrix = (1 + return_matrix).resample('ME').prod() - 1
+monthly_return_matrix = monthly_return_matrix.dropna()
 
 trading_days_per_month = return_matrix.groupby(pd.Grouper(freq="ME")).size()
-print ("Trading Days per Month:\n", trading_days_per_month)
+#print ("Trading Days per Month:\n", trading_days_per_month)
 
 # risk-free rate taken from the FRB St. Louis FRED database, 3-month Treasury Bill rate
 # this rate will depend on the end date for each rolling period.
@@ -60,11 +65,13 @@ rolling_period = return_matrix[return_matrix.index.year == 2020].shape[0] # numb
 total_months = return_matrix.groupby(pd.Grouper(freq="ME")).tail(1).index # number of months
 #print ("Total Months:", total_months)
 
-print("No. of rows per rolling period:", rolling_period)
+#print("No. of rows per rolling period:", rolling_period)
 
-rolling_windows = sum(return_matrix.index.get_loc(date) >= rolling_period 
+rolling_windows = sum(return_matrix.index.get_loc(date) >= rolling_period - 1
                       for date in total_months)
-print ("Rolling Windows:", rolling_windows)
+#print ("Rolling Windows:", rolling_windows)
+
+rolling_period_months = 12; # 12 month rolling period
 
 # code for Black Litterman Views - 4 in total.
 
@@ -79,23 +86,44 @@ P = np.array([BLO_views(asset_list, {"NVDA": 1}),
                 BLO_views(asset_list, {"LMT": 1, "MSFT": -1}),
                 BLO_views(asset_list, {"TEL": 1, "MU": -1}),
                 BLO_views(asset_list, {"MRVL": 1})])
-Q = np.array([0.025, 0.01, 0.01, 0.015])
-print("P Matrix:\n", P)
-print("Q Vector:\n", Q)
+Q_monthly = np.array([0.025, 0.01, 0.01, 0.015])
+Q = (1 + Q_monthly) ** 12 - 1  # convert monthly to annualized
+#print("P Matrix:\n", P)
+#print("Q Vector:\n", Q)
 
 # end of code for Black Litterman Views
 
 tau = 0.035
 confidence_level = 0.50
 confidence_levels = np.full(len(Q), confidence_level)
-print ("Confidence Levels:\n", confidence_levels)
+#print ("Confidence Levels:\n", confidence_levels)
 
+# utility function
+def neg_utility(weights, expected_returns, cov_matrix, risk_aversion):
+    portfolio_return = np.dot(weights, expected_returns)
+    portfolio_variance = np.dot(weights.T, np.dot(cov_matrix, weights))
+    utility = portfolio_return - 0.5 * risk_aversion * portfolio_variance
+    return -utility  # Negate for minimization
+
+initial_weights = np.array([1 / asset_count] * asset_count)
+bounds = [(0, 1) for _ in range(asset_count)]
+constraints = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
+
+x_BLO_roll = np.zeros((rolling_windows, asset_count))
+mu_BLO_roll = np.zeros((rolling_windows, asset_count))
+pi_BLO_roll = np.zeros((rolling_windows, asset_count))
+
+gross_return = np.zeros(rolling_windows)
+net_return = np.zeros(rolling_windows)
+#cumulative_return = np.zeros(rolling_windows)
+#turnover = np.zeros(rolling_windows)
+#trans_cost = np.zeros(rolling_windows)
 
 rolling_window_count = 0
 
 for i, end_date in enumerate(total_months):
     end_loc = return_matrix.index.get_loc(end_date)
-    if end_loc < rolling_period:
+    if end_loc < rolling_period - 1:
         continue
 
     rolling_window_count += 1
