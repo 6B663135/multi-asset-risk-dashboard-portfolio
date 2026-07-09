@@ -153,6 +153,21 @@ for i, end_date in enumerate(total_months):
     posterior_cov_inverse = np.linalg.inv(tau_sigma) + P.T @ np.linalg.inv(rolling_omega) @ P
     posterior_returns = np.linalg.inv(posterior_cov_inverse) @ (np.linalg.inv(tau_sigma) @ implied_equilibrium_returns + P.T @ np.linalg.inv(rolling_omega) @ Q)
 
+    optimization_result = minimize(neg_utility, initial_weights, 
+                                   args=(posterior_returns, annualized_rolling_cov_matrix, risk_aversion_coefficient), method='SLSQP', 
+                                   bounds=bounds, constraints=constraints)
+    
+    if not optimization_result.success:
+        print(f"Optimization failed for rolling window ending on {rolling_window_end_date}.")
+        continue
+
+    blo_weights = optimization_result.x
+    roll_idx = rolling_window_count - 1
+    x_BLO_roll[roll_idx, :] = blo_weights
+    mu_BLO_roll[roll_idx, :] = posterior_returns
+    pi_BLO_roll[roll_idx, :] = implied_equilibrium_returns
+
+
     #print ("Rolling Omega Matrix:\n", rolling_omega)
     #print("Rolling Window:", rolling_window_count)
     #print("Window End Date:", rolling_window_end_date)
