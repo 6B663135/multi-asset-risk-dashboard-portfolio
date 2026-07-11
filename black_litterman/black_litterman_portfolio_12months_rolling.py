@@ -225,9 +225,9 @@ for i in range(rolling_period_months - 1, len(total_months)):
     #for idx in top_5_indices:
         #print(f"{asset_list[idx]}: {blo_weights[idx]:.4f}")
 
-    max_idx = np.argmax(blo_weights)
-    print("Max Weight Asset:", asset_list[max_idx])
-    print("Max Weight:", blo_weights[max_idx])
+    #max_idx = np.argmax(blo_weights)
+    #print("Max Weight Asset:", asset_list[max_idx])
+    #print("Max Weight:", blo_weights[max_idx])
 
     #calculate cumulative return
 
@@ -261,12 +261,12 @@ for i in range(rolling_period_months - 1, len(total_months)):
     #print("Mean Rolling Returns:\n", mean_rolling_returns)
     #print("Rolling Covariance Matrix:\n", rolling_cov_matrix)
 
-    valid_net_returns = pd.Series(net_realized_BLO_returns[:len(realized_return_dates)],
-                                   index=realized_return_dates).dropna()
-    cumulative_net_BLO_returns = (1 + valid_net_returns).cumprod() - 1
-    final_cumulative_net_BLO_return = cumulative_net_BLO_returns.iloc[-1] 
-    
-    print(f"Final Cumulative Net Black-Litterman Return: {final_cumulative_net_BLO_return:.2%}")
+valid_net_returns = pd.Series(net_realized_BLO_returns[:len(realized_return_dates)],
+                                index=realized_return_dates).dropna()
+cumulative_net_BLO_returns = (1 + valid_net_returns).cumprod() - 1
+final_cumulative_net_BLO_return = cumulative_net_BLO_returns.iloc[-1] 
+
+print(f"Final Cumulative Net Black-Litterman Return: {final_cumulative_net_BLO_return:.2%}")
 
 
 
