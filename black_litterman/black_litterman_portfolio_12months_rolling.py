@@ -123,10 +123,19 @@ net_return = np.zeros(rolling_windows)
 
 rolling_window_count = 0
 
+transaction_cost = 0.0015 # transaction cost of 0.15% per trade - assumed value.
+
 expected_rolling_BLO_returns = np.full((rolling_windows, asset_count), np.nan)
 volatility_BLO_roll = np.full((rolling_windows, asset_count), np.nan)
 realized_rolling_BLO_returns = np.full((rolling_windows, asset_count), np.nan)
+realized_portfolio_BLO_returns = np.full(rolling_windows, np.nan)
+gross_realized_BLO_returns = np.full(rolling_windows, np.nan)
+net_realized_BLO_returns = np.full(rolling_windows, np.nan)
+turnover_BLO_roll = np.full(rolling_windows, np.nan)
+transaction_cost_BLO_roll = np.full(rolling_windows, np.nan)
 rebalance_dates = []
+
+
 
 for i in range(rolling_period_months - 1, len(total_months)):
 
@@ -171,6 +180,16 @@ for i in range(rolling_period_months - 1, len(total_months)):
     blo_weights = optimization_result.x
     roll_idx = rolling_window_count - 1
 
+    if roll_idx == 0:
+        previous_weights = np.zeros(asset_count)
+    else:
+        previous_weights = x_BLO_roll[roll_idx - 1, :]
+
+    turnover = np.sum(np.abs(blo_weights - previous_weights))
+    transaction_costs = transaction_cost * turnover
+    turnover_BLO_roll[roll_idx] = turnover
+    transaction_cost_BLO_roll[roll_idx] = transaction_costs
+    
     portfolio_expected_return = np.dot(blo_weights, posterior_returns)
     portfolio_volatility = np.sqrt(np.dot
                                    (blo_weights.T, np.dot
@@ -186,13 +205,13 @@ for i in range(rolling_period_months - 1, len(total_months)):
 
     # proof that the code works by printing relevant information for each rolling window.
 
-    print(f"Rolling Window {rolling_window_count}:")
-    print(f"Start Date: {rolling_window_returns.index[0]}")
-    print(f"End Date: {rolling_window_returns.index[-1]}")
-    print(f"Risk Free Rate: {rolling_risk_free_rate:.4f}")
+    #print(f"Rolling Window {rolling_window_count}:")
+    #print(f"Start Date: {rolling_window_returns.index[0]}")
+    #print(f"End Date: {rolling_window_returns.index[-1]}")
+    #print(f"Risk Free Rate: {rolling_risk_free_rate:.4f}")
     #print("Rows in Window:", rolling_window_returns.shape[0])
 
-    print("Risk Aversion:", risk_aversion_coefficient)
+    #print("Risk Aversion:", risk_aversion_coefficient)
     #print("Weights Sum:", blo_weights.sum()) # should be 1 for each rolling window!
     #print("Min Weight:", blo_weights.min())
     #print("Max Weight:", blo_weights.max())
@@ -217,8 +236,12 @@ for i in range(rolling_period_months - 1, len(total_months)):
     next_month_returns = return_matrix.loc[next_month_start:next_month_end]
     
     if not next_month_returns.empty:
-        daily_portfolio_returns = next_month_returns.dot(blo_weights)
-        realized_rolling_BLO_returns[roll_idx, :] = (1+daily_portfolio_returns).prod() - 1
+        realized_asset_returns = (1+next_month_returns).prod() - 1
+        realized_rolling_BLO_returns[roll_idx, :] = realized_asset_returns.values
+        gross_realized_BLO_returns[roll_idx] = np.dot(blo_weights,
+                                                          realized_asset_returns.values)
+        realized_portfolio_BLO_returns[roll_idx] = gross_realized_BLO_returns[roll_idx]        
+        net_realized_BLO_returns[roll_idx] = gross_realized_BLO_returns[roll_idx] - transaction_costs
 
 
     #print ("Rolling Omega Matrix:\n", rolling_omega)
@@ -235,10 +258,18 @@ for i in range(rolling_period_months - 1, len(total_months)):
     #print("Mean Rolling Returns:\n", mean_rolling_returns)
     #print("Rolling Covariance Matrix:\n", rolling_cov_matrix)
 
-valid_realized_returns = pd.Series(realized_rolling_BLO_returns,index=rebalance_dates).dropna()
-cumulative_BLO_returns = (1 + valid_realized_returns).cumprod() - 1
+    valid_net_returns = pd.Series(net_realized_BLO_returns, index=rebalance_dates).dropna()
+    cumulative_net_BLO_returns = (1 + valid_net_returns).cumprod() - 1
+    final_cumulative_net_BLO_return = cumulative_net_BLO_returns.iloc[-1] 
+    
+    print(f"Final Cumulative Net Black-Litterman Return: {final_cumulative_net_BLO_return:.2%}")
 
-print("Cumulative BLO Returns:\n", cumulative_BLO_returns)
+
+
+
+
+
+
 
 
 
