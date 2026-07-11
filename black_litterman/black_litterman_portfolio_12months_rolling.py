@@ -18,7 +18,7 @@ return_matrix.index.name = "Date"
 
 asset_list = returns.columns[1:25].str.replace("_Price","").tolist()
 asset_count = len(asset_list)
-print ("Asset Count:", asset_count)
+#print ("Asset Count:", asset_count)
 #print("Asset List:", asset_list)
 
 # market capitalization list for the assets in asset_list, using yfinance to fetch market cap data
@@ -72,6 +72,8 @@ rolling_windows = sum(return_matrix.index.get_loc(date) >= rolling_period - 1
 #print ("Rolling Windows:", rolling_windows)
 
 rolling_period_months = 12; # 12 month rolling period
+total_months = return_matrix.groupby(pd.Grouper(freq="ME")).tail(1).index
+rolling_windows = len(total_months) - rolling_period_months + 1
 
 # code for Black Litterman Views - 4 in total.
 
@@ -121,13 +123,18 @@ net_return = np.zeros(rolling_windows)
 
 rolling_window_count = 0
 
-for i, end_date in enumerate(total_months):
-    end_loc = return_matrix.index.get_loc(end_date)
-    if end_loc < rolling_period - 1:
-        continue
+expected_rolling_BLO_returns = np.full((rolling_windows, asset_count), np.nan)
+volatility_BLO_roll = np.full((rolling_windows, asset_count), np.nan)
+realized_rolling_BLO_returns = np.full((rolling_windows, asset_count), np.nan)
+rebalance_dates = []
+
+for i in range(rolling_period_months - 1, len(total_months)):
 
     rolling_window_count += 1
-    rolling_window_returns = return_matrix.iloc[end_loc - rolling_period + 1:end_loc + 1]
+    window_end_date = total_months[i]
+    window_start_date = total_months[i - rolling_period_months + 1].to_period("M").start_time
+
+    rolling_window_returns = return_matrix.loc[window_start_date:window_end_date]
     rolling_window_end_date = rolling_window_returns.index[-1]
 
     mean_rolling_returns = rolling_window_returns.mean()
@@ -163,9 +170,55 @@ for i, end_date in enumerate(total_months):
 
     blo_weights = optimization_result.x
     roll_idx = rolling_window_count - 1
+
+    portfolio_expected_return = np.dot(blo_weights, posterior_returns)
+    portfolio_volatility = np.sqrt(np.dot
+                                   (blo_weights.T, np.dot
+                                    (annualized_rolling_cov_matrix, blo_weights)))
+    
+    expected_rolling_BLO_returns[roll_idx, :] = portfolio_expected_return
+    volatility_BLO_roll[roll_idx, :] = portfolio_volatility
+    rebalance_dates.append(rolling_window_end_date)
+
     x_BLO_roll[roll_idx, :] = blo_weights
     mu_BLO_roll[roll_idx, :] = posterior_returns
     pi_BLO_roll[roll_idx, :] = implied_equilibrium_returns
+
+    # proof that the code works by printing relevant information for each rolling window.
+
+    print(f"Rolling Window {rolling_window_count}:")
+    print(f"Start Date: {rolling_window_returns.index[0]}")
+    print(f"End Date: {rolling_window_returns.index[-1]}")
+    print(f"Risk Free Rate: {rolling_risk_free_rate:.4f}")
+    #print("Rows in Window:", rolling_window_returns.shape[0])
+
+    print("Risk Aversion:", risk_aversion_coefficient)
+    #print("Weights Sum:", blo_weights.sum()) # should be 1 for each rolling window!
+    #print("Min Weight:", blo_weights.min())
+    #print("Max Weight:", blo_weights.max())
+
+    # top 5 assets and their weights for each rolling window
+
+    #print("Top 5 Assets and Weights:")
+    #top_5_indices = np.argsort(blo_weights)[-5:][::-1]
+    #for idx in top_5_indices:
+        #print(f"{asset_list[idx]}: {blo_weights[idx]:.4f}")
+
+    max_idx = np.argmax(blo_weights)
+    print("Max Weight Asset:", asset_list[max_idx])
+    print("Max Weight:", blo_weights[max_idx])
+
+    #calculate cumulative return
+
+    next_month = rolling_window_end_date.to_period("M") + 1
+    next_month_start = next_month.to_timestamp(how='start')
+    next_month_end = next_month.to_timestamp(how='end')
+
+    next_month_returns = return_matrix.loc[next_month_start:next_month_end]
+    
+    if not next_month_returns.empty:
+        daily_portfolio_returns = next_month_returns.dot(blo_weights)
+        realized_rolling_BLO_returns[roll_idx, :] = (1+daily_portfolio_returns).prod() - 1
 
 
     #print ("Rolling Omega Matrix:\n", rolling_omega)
@@ -181,6 +234,12 @@ for i, end_date in enumerate(total_months):
     #print(f"End Date:{rolling_window_returns.index[-1]}")
     #print("Mean Rolling Returns:\n", mean_rolling_returns)
     #print("Rolling Covariance Matrix:\n", rolling_cov_matrix)
+
+valid_realized_returns = pd.Series(realized_rolling_BLO_returns,index=rebalance_dates).dropna()
+cumulative_BLO_returns = (1 + valid_realized_returns).cumprod() - 1
+
+print("Cumulative BLO Returns:\n", cumulative_BLO_returns)
+
 
 
 
