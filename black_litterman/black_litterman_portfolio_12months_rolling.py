@@ -134,6 +134,7 @@ net_realized_BLO_returns = np.full(rolling_windows, np.nan)
 turnover_BLO_roll = np.full(rolling_windows, np.nan)
 transaction_cost_BLO_roll = np.full(rolling_windows, np.nan)
 rebalance_dates = []
+realized_return_dates = []
 
 
 
@@ -180,6 +181,8 @@ for i in range(rolling_period_months - 1, len(total_months)):
     blo_weights = optimization_result.x
     roll_idx = rolling_window_count - 1
 
+    rebalance_dates.append(rolling_window_end_date)
+    
     if roll_idx == 0:
         previous_weights = np.zeros(asset_count)
     else:
@@ -197,8 +200,7 @@ for i in range(rolling_period_months - 1, len(total_months)):
     
     expected_rolling_BLO_returns[roll_idx, :] = portfolio_expected_return
     volatility_BLO_roll[roll_idx, :] = portfolio_volatility
-    rebalance_dates.append(rolling_window_end_date)
-
+    
     x_BLO_roll[roll_idx, :] = blo_weights
     mu_BLO_roll[roll_idx, :] = posterior_returns
     pi_BLO_roll[roll_idx, :] = implied_equilibrium_returns
@@ -242,6 +244,7 @@ for i in range(rolling_period_months - 1, len(total_months)):
                                                           realized_asset_returns.values)
         realized_portfolio_BLO_returns[roll_idx] = gross_realized_BLO_returns[roll_idx]        
         net_realized_BLO_returns[roll_idx] = gross_realized_BLO_returns[roll_idx] - transaction_costs
+        realized_return_dates.append(next_month_returns.index[-1])
 
 
     #print ("Rolling Omega Matrix:\n", rolling_omega)
@@ -258,7 +261,8 @@ for i in range(rolling_period_months - 1, len(total_months)):
     #print("Mean Rolling Returns:\n", mean_rolling_returns)
     #print("Rolling Covariance Matrix:\n", rolling_cov_matrix)
 
-    valid_net_returns = pd.Series(net_realized_BLO_returns, index=rebalance_dates).dropna()
+    valid_net_returns = pd.Series(net_realized_BLO_returns[:len(realized_return_dates)],
+                                   index=realized_return_dates).dropna()
     cumulative_net_BLO_returns = (1 + valid_net_returns).cumprod() - 1
     final_cumulative_net_BLO_return = cumulative_net_BLO_returns.iloc[-1] 
     
