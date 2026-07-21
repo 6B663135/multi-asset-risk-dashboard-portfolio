@@ -4,6 +4,8 @@ import yfinance as yf
 import math
 import os
 from scipy.optimize import minimize
+from main import relevant_functions as rf
+
 
 #print(os.getcwd())
 
