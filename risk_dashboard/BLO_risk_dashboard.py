@@ -6,6 +6,7 @@ import os
 from scipy.optimize import minimize
 from pathlib import Path
 import sys
+import matplotlib.pyplot as plt
 
 # avoid traceback error
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -110,6 +111,14 @@ def kurtosis(r):
 
     return exp / sigma_r ** 4
 
+def excess_kurtosis(r):
+    demeaned_r = r - r.mean()
+    sigma_r = r.std(ddof=0)
+
+    exp = (demeaned_r ** 4).mean()
+
+    return exp / sigma_r ** 4 - 3
+
 # test to see if the code works (final rolling period)
 #BLOvar_95 = historical_var(blo.valid_net_returns,level=5)
 #BLOcvar_95 = historical_cvar(blo.valid_net_returns,level=5)
@@ -128,6 +137,15 @@ rolling_BLOvar_95 = blo.valid_net_returns.rolling(window=rolling_window, min_per
 
 rolling_BLOcvar_95 = blo.valid_net_returns.rolling(window=rolling_window,min_periods=rolling_window).apply(
     lambda x: historical_cvar(pd.Series(x), level=5), raw=False
+)
+
+# historical VaR and CVaR for rolling net returns (99%)
+rolling_BLOvar_99 = blo.valid_net_returns.rolling(window=rolling_window, min_periods=rolling_window).apply(
+    lambda x: historical_var(pd.Series(x), level=1), raw=False
+)
+
+rolling_BLOcvar_99 = blo.valid_net_returns.rolling(window=rolling_window,min_periods=rolling_window).apply(
+    lambda x: historical_cvar(pd.Series(x), level=1), raw=False
 )
 
 # rolling annualized portfolio volatility
