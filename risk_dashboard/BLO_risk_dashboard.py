@@ -178,10 +178,10 @@ wealth_curves = pd.DataFrame({"Portfolio Wealth": portfolio_wealth_curve,
 
 # drawdown
 previous_peak = wealth_curve.cummax()
-drawdown = (wealth_curve - previous_peak) / previous_peak
-max_drawdown_date = drawdown.idxmin()
-max_drawdown = drawdown.min()
-current_drawdown = drawdown.iloc[-1]
+drawdowns = (wealth_curve - previous_peak) / previous_peak
+max_drawdown_date = drawdowns.idxmin()
+max_drawdown = drawdowns.min()
+current_drawdown = drawdowns.iloc[-1]
 
 # time to recovery
 peak_before_drawdown_date = wealth_curve.loc[:max_drawdown_date].idxmax()
@@ -200,7 +200,7 @@ else:
 time_to_recovery_info = pd.DataFrame({"Metric" : [
         "Peak Before Max Drawdown","Max Drawdown Date","Max Drawdown","Recovery Date",
         "Time to Recovery (Months)"
-    ],"Value": [peak_before_drawdown_date,max_drawdown_date,max_drawdown,recovery_dates,
+    ],"Value": [peak_before_drawdown_date,max_drawdown_date,max_drawdown,recovery_date,
                 time_to_recovery] })
 
 print(time_to_recovery_info)
@@ -210,6 +210,53 @@ worst_month = blo.valid_net_returns.idxmin()
 worst_month_return = blo.valid_net_returns.min()
 worst_month_info = pd.DataFrame({"Worst Month": [worst_month],
                                  "Worst Month's Return": [worst_month_return]})
+
+# 5 worst drawdown periods
+worst_drawdown = []
+
+in_drawdown = False
+trough_drawdown = 0
+peak_date = None
+trough_date = None
+peak_value = 0
+recovery_date = None
+
+for date in wealth_curve.index:
+    wealth = wealth_curve.loc[date]
+    peak = previous_peak.loc[date]
+    drawdown = drawdowns.loc[date]
+
+    if not in_drawdown and drawdown < 0:
+        in_drawdown = True
+        
+        peak_date = wealth_curve.loc[:date][wealth_curve.loc[:date]==previous_peak.loc[date]].index[-1]
+
+        peak_value = previous_peak.loc[date]
+        trough_date = date
+        trough_drawdown = drawdown
+        recovery_date = None
+
+    elif in_drawdown and drawdown < trough_drawdown:
+        recovery_date = date
+
+        worst_drawdown.append({"Peak Date": peak_date, "Trough Date": trough_date, "Recovery Date": recovery_date,
+            "Drawdown": trough_drawdown})
+        in_drawdown = False
+
+# last drawdown not recovered by the end of the exported data...
+if in_drawdown:
+    worst_drawdown.append({"Peak Date": peak_date, "Trough Date": trough_date, "Recovery Date": "Unavailable",
+            "Drawdown": trough_drawdown})
+
+five_worst_drawdown_periods = pd.DataFrame(worst_drawdown).sort_values(by="Drawdown")
+#print(five_worst_drawdown_periods)
+
+
+
+
+        
+
+
 #print(worst_month_info)
 
 print('works')
