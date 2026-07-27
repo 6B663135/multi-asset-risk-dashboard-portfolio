@@ -7,6 +7,7 @@ import scipy.stats as stats
 from pathlib import Path
 import sys
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 # avoid traceback error
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -327,7 +328,20 @@ final_risk_contribution = pd.DataFrame({"Asset": blo.asset_list,
     "% Contribution to Volatility": percent_contribution
 }).sort_values(by="% Contribution to Volatility", ascending=False)
 
-#print(final_risk_contribution.to_string(float_format="{:.4f}".format))
+# Top 5 risk contributors - final rolling period
+print(final_risk_contribution.head(5).to_string(float_format="{:.4f}".format))
+
+# Plot for the risk contributors - final rolling period
+
+plt.figure(figsize=(12,6))
+plt.bar(final_risk_contribution["Asset"],
+        final_risk_contribution["% Contribution to Volatility"] * 100)
+plt.title("Final Risk Contribution by Asset")
+plt.xlabel("Asset")
+plt.ylabel("% Contribution to Volatility")
+plt.xticks(rotation=45, ha="right")
+plt.tight_layout()
+#plt.show()
 
 # Rolling Risk Contribution + Asset Weights
 rolling_risk_contribution = []
@@ -348,8 +362,20 @@ for i, date in enumerate(blo.rebalance_dates):
     rolling_risk_contribution.append(period_risk)
 
 rolling_risk_contribution = pd.concat(rolling_risk_contribution, ignore_index=True)
+#print(rolling_risk_contribution.tail().to_string(float_format="{:.4f}".format))
 
-print(rolling_risk_contribution.tail().to_string(float_format="{:.4f}".format))
+# Heatmap for Rolling Risk Contribution (% Contribution to Volatility) for each asset
+risk_contribution_heatmap = rolling_risk_contribution.pivot(
+    index="Date",columns="Asset",values="% Contribution to Volatility"
+)
+plt.figure(figsize=(16,10))
+sns.heatmap(risk_contribution_heatmap * 100,cmap="RdYlGn_r",center=0,
+        linewidths=0.2)
+plt.title("Rolling % Contribution to Volatility - Heatmap")
+plt.xlabel("Asset")
+plt.ylabel("Rolling Period")
+plt.tight_layout()
+#plt.show()
 
 
 
