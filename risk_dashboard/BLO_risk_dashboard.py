@@ -1,9 +1,9 @@
 import pandas as pd
 import numpy as np
-import yfinance as yf
 import math
 import os
 from scipy.optimize import minimize
+import scipy.stats as stats
 from pathlib import Path
 import sys
 import matplotlib.pyplot as plt
@@ -255,6 +255,10 @@ for date in wealth_curve.index:
         recovery_date = None
 
     elif in_drawdown and drawdown < trough_drawdown:
+        trough_date = date
+        trough_drawdown = drawdown
+
+    elif in_drawdown and drawdown == 0:
         recovery_date = date
 
         worst_drawdown.append({"Peak Date": peak_date, "Trough Date": trough_date, "Recovery Date": recovery_date,
@@ -269,13 +273,89 @@ if in_drawdown:
 five_worst_drawdown_periods = pd.DataFrame(worst_drawdown).sort_values(by="Drawdown")
 #print(five_worst_drawdown_periods)
 
+# return histogram
+plt.hist(blo.valid_net_returns * 100, bins=25) # multiplying by 100 to get % monthly returns
+plt.title("Portfolio Net Return Distribution")
+plt.xlabel("Net Return (% - Monthly)")
+plt.ylabel("Frequency")
+#plt.show()
+
+# normal-distribution comparison
+returns = blo.valid_net_returns.dropna() # omit returns that are N/A or None
+
+mu = returns.mean()
+sigma = returns.std()
+x = np.linspace(returns.min(), returns.max(), 100)
+normal_curve = stats.norm.pdf(x,mu,sigma)
+
+plt.hist(returns, bins=25, density=True, alpha=0.5)
+plt.title("Portfolio Returns vs Normal Distribution")
+plt.xlabel("Net Return (% - Monthly)")
+plt.ylabel("Density")
+#plt.show()
+
+#Q-Q plot
+stats.probplot(returns,dist="norm", plot=plt)
+plt.title("Q-Q Plot of Portfolio Net Returns")
+#plt.show()
+
+# Portfolio weight by asset - final and for each rolling period
+
+#Final rolling period's portfolio asset weightage
+final_blo_weights = blo.blo_weights 
+final_blo_weights_asset = pd.DataFrame({"Asset" : blo.asset_list,
+        "Weight" : final_blo_weights}).sort_values(by="Weight",ascending=False)
+#print(final_blo_weights_asset.to_string(formatters={"Weight":"{:.4f}".format}))
+
+#Portfolio asset weightage for each period
+rolling_blo_weights = pd.DataFrame(blo.x_BLO_roll, index=blo.rebalance_dates,
+        columns=blo.asset_list)
+#print(rolling_blo_weights.tail().to_string(float_format="{:.4f}".format))
+
+# Final Risk Contribution (along with the asset weight)
+final_cov = blo.annualized_rolling_cov_matrix
+final_portfolio_vol = portfolio_vol(final_blo_weights, final_cov)
+
+marginal_contribution = final_cov @ final_blo_weights / final_portfolio_vol
+component_contribution = final_blo_weights * marginal_contribution
+percent_contribution = component_contribution / final_portfolio_vol
+
+final_risk_contribution = pd.DataFrame({"Asset": blo.asset_list,
+    "Weight": final_blo_weights,
+    "Marginal Contribution to Risk": marginal_contribution,
+    "Component Contribution to Risk": component_contribution,
+    "% Contribution to Volatility": percent_contribution
+}).sort_values(by="% Contribution to Volatility", ascending=False)
+
+#print(final_risk_contribution.to_string(float_format="{:.4f}".format))
+
+# Rolling Risk Contribution + Asset Weights
+rolling_risk_contribution = []
+
+for i, date in enumerate(blo.rebalance_dates):
+    weights = blo.x_BLO_roll[i]
+    cov = blo.annualized_rolling_cov[i]
+    port_vol = portfolio_vol(weights, cov)
+
+    mcr = cov @ weights / port_vol
+    ccr = weights * mcr
+    pcr = ccr / port_vol
+
+    period_risk = pd.DataFrame({"Date": date, "Asset": blo.asset_list,
+        "Weight": weights, "Marginal Contribution to Risk": mcr,
+        "Component Contribution to Risk": ccr, "% Contribution to Volatility": pcr})
+
+    rolling_risk_contribution.append(period_risk)
+
+rolling_risk_contribution = pd.concat(rolling_risk_contribution, ignore_index=True)
+
+print(rolling_risk_contribution.tail().to_string(float_format="{:.4f}".format))
 
 
 
-        
 
 
-#print(worst_month_info)
+
 
 print('works')
 '''

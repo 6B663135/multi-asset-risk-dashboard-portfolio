@@ -150,6 +150,7 @@ turnover_BLO_roll = np.full(rolling_windows, np.nan)
 transaction_cost_BLO_roll = np.full(rolling_windows, np.nan)
 rebalance_dates = []
 realized_return_dates = []
+annualized_rolling_cov = []
 
 
 
@@ -176,6 +177,7 @@ for i in range(rolling_period_months - 1, len(total_months)):
     risk_aversion_coefficient = (annualized_benchmark_returns - rolling_risk_free_rate) / annualized_benchmark_variance
     risk_aversion_coefficient = max(risk_aversion_coefficient, 1)  # Ensure a minimum value of 1.
     annualized_rolling_cov_matrix = rolling_cov_matrix * 252
+    annualized_rolling_cov.append(annualized_rolling_cov_matrix)
 
     implied_equilibrium_returns = risk_aversion_coefficient * annualized_rolling_cov_matrix.dot(market_cap_weights)
 
