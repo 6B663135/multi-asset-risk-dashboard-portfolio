@@ -6,6 +6,8 @@ import os
 from scipy.optimize import minimize
 from pathlib import Path
 import sys
+from curl_cffi import requests as curl_requests
+from io import StringIO
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -25,6 +27,7 @@ Index column of returns starts from 25 (Z), and index row starts from 2, till th
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 ASSET_DATA_DIR = PROJECT_ROOT / "asset data"
+YF_SESSION = curl_requests.Session(impersonate="chrome", verify=False)
 
 returns = pd.read_csv(ASSET_DATA_DIR / "asset_prices_returns.csv", parse_dates=["Date"])
 return_matrix = returns.iloc[:,25:]
@@ -37,17 +40,45 @@ asset_count = len(asset_list)
 #print("Asset List:", asset_list)
 
 # market capitalization list for the assets in asset_list, using yfinance to fetch market cap data
+def get_market_cap(asset):
+    ticker = yf.Ticker(asset, session=YF_SESSION)
+    market_cap = ticker.info.get("marketCap", np.nan)
+
+    if pd.isna(market_cap):
+        fast_info = getattr(ticker, "fast_info", {})
+        market_cap = fast_info.get("market_cap", np.nan)
+
+    if pd.isna(market_cap):
+        response = YF_SESSION.get(
+            "https://query1.finance.yahoo.com/v7/finance/quote",
+            params={"symbols": asset},
+            timeout=20
+        )
+        quote_data = response.json().get("quoteResponse", {}).get("result", [])
+        if quote_data:
+            market_cap = quote_data[0].get("marketCap", np.nan)
+
+    return market_cap
+
 market_cap_list = []
 for asset in asset_list:
-    market_cap = yf.Ticker(asset).info.get("marketCap", np.nan)
-    market_cap_list.append(market_cap)
+    market_cap_list.append(get_market_cap(asset))
 
 #print("Market Cap List:", market_cap_list)
 
 # reverse optimization - market capitalizaiton weight for the 24 assets...
 # this is constant for all rolling windows.
 
-market_cap_weights = np.array(market_cap_list) / np.sum(market_cap_list)
+market_cap_array = np.array(market_cap_list, dtype=float)
+if np.isnan(market_cap_array).any():
+    missing_market_caps = [asset for asset, market_cap in zip(asset_list, market_cap_array) if np.isnan(market_cap)]
+    fallback_market_cap = np.nanmedian(market_cap_array)
+    if pd.isna(fallback_market_cap):
+        fallback_market_cap = 1
+    print(f"Missing market capitalization data for {missing_market_caps}; using fallback market cap {fallback_market_cap:,.0f}.")
+    market_cap_array = np.nan_to_num(market_cap_array, nan=fallback_market_cap)
+
+market_cap_weights = market_cap_array / np.sum(market_cap_array)
 #print ("Market Cap Weights:\n", market_cap_weights)
 
 return_matrix = return_matrix.dropna()
@@ -63,13 +94,15 @@ trading_days_per_month = return_matrix.groupby(pd.Grouper(freq="ME")).size()
 # this rate will depend on the end date for each rolling period.
 
 risk_free_url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS3MO"
-risk_free = pd.read_csv(risk_free_url, parse_dates=["observation_date"])
+risk_free_response = YF_SESSION.get(risk_free_url, timeout=30)
+risk_free_response.raise_for_status()
+risk_free = pd.read_csv(StringIO(risk_free_response.text), parse_dates=["observation_date"])
 risk_free = risk_free.rename(columns={"observation_date": "Date", "DGS3MO": "Risk_Free_Rate"})
 risk_free = risk_free.set_index("Date")
 risk_free["Risk_Free_Rate"] = pd.to_numeric(risk_free["Risk_Free_Rate"], errors='coerce') 
 #avoid non-numeric errors.
-risk_free["Risk_Free_Rate"] = risk_free["Risk_Free_Rate"].ffill() / 100
-risk_free = risk_free.reindex(return_matrix.index).ffill()
+risk_free["Risk_Free_Rate"] = risk_free["Risk_Free_Rate"].ffill().bfill() / 100
+risk_free = risk_free.reindex(return_matrix.index).ffill().bfill()
 #print ("Risk Free Rate:\n", risk_free.head())
 
 benchmark_returns = return_matrix.dot(market_cap_weights)
@@ -172,9 +205,18 @@ for i in range(rolling_period_months - 1, len(total_months)):
     annualized_benchmark_returns = rolling_benchmark_returns.mean() * 252
     annualized_benchmark_variance = rolling_benchmark_returns.var() * 252
 
-    rolling_risk_free_rate = risk_free["Risk_Free_Rate"].asof(rolling_window_end_date)
+    rolling_risk_free_rate = risk_free["Risk_Free_Rate"].dropna().asof(rolling_window_end_date)
+    if pd.isna(rolling_risk_free_rate):
+        rolling_risk_free_rate = 0.0
 
-    risk_aversion_coefficient = (annualized_benchmark_returns - rolling_risk_free_rate) / annualized_benchmark_variance
+    if pd.isna(annualized_benchmark_variance) or annualized_benchmark_variance <= 0:
+        risk_aversion_coefficient = 1
+    else:
+        risk_aversion_coefficient = (annualized_benchmark_returns - rolling_risk_free_rate) / annualized_benchmark_variance
+
+    if pd.isna(risk_aversion_coefficient) or np.isinf(risk_aversion_coefficient) or risk_aversion_coefficient <= 0:
+        risk_aversion_coefficient = 1
+
     risk_aversion_coefficient = max(risk_aversion_coefficient, 1)  # Ensure a minimum value of 1.
     annualized_rolling_cov_matrix = rolling_cov_matrix * 252
     annualized_rolling_cov.append(annualized_rolling_cov_matrix)
@@ -187,12 +229,23 @@ for i in range(rolling_period_months - 1, len(total_months)):
     posterior_cov_inverse = np.linalg.inv(tau_sigma) + P.T @ np.linalg.inv(rolling_omega) @ P
     posterior_returns = np.linalg.inv(posterior_cov_inverse) @ (np.linalg.inv(tau_sigma) @ implied_equilibrium_returns + P.T @ np.linalg.inv(rolling_omega) @ Q)
 
-    optimization_result = minimize(neg_utility, initial_weights, 
-                                   args=(posterior_returns, annualized_rolling_cov_matrix, risk_aversion_coefficient), method='SLSQP', 
+    if np.isnan(posterior_returns).any():
+        raise RuntimeError(
+            f"posterior_returns has NaN for rolling window ending on {rolling_window_end_date}. "
+            f"risk_aversion={risk_aversion_coefficient}, "
+            f"benchmark_return={annualized_benchmark_returns}, "
+            f"benchmark_variance={annualized_benchmark_variance}, "
+            f"risk_free={rolling_risk_free_rate}, "
+            f"market_cap_weights_nan={np.isnan(market_cap_weights).any()}"
+        )
+
+    optimization_result = minimize(neg_utility, initial_weights,
+                                   args=(posterior_returns, annualized_rolling_cov_matrix, risk_aversion_coefficient), method='SLSQP',
                                    bounds=bounds, constraints=constraints)
     
     if not optimization_result.success:
         print(f"Optimization failed for rolling window ending on {rolling_window_end_date}.")
+        print("Reason:", optimization_result.message)
         continue
 
     blo_weights = optimization_result.x
@@ -285,6 +338,9 @@ monthly_benchmark_returns = (1 + benchmark_returns).resample("ME").prod() - 1
 valid_benchmark_returns = monthly_benchmark_returns.loc[
     monthly_benchmark_returns.index.isin(valid_net_returns.index)
 ]
+if valid_net_returns.empty:
+    raise RuntimeError("BLO produced no valid realized returns because all rolling optimizations failed or no next-month returns were available.")
+
 cumulative_net_BLO_returns = (1 + valid_net_returns).cumprod() - 1
 final_cumulative_net_BLO_return = cumulative_net_BLO_returns.iloc[-1] 
 
