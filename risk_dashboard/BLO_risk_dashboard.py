@@ -222,7 +222,7 @@ time_to_recovery_info = pd.DataFrame({"Metric" : [
     ],"Value": [peak_before_drawdown_date,max_drawdown_date,max_drawdown,recovery_date,
                 time_to_recovery] })
 
-print(time_to_recovery_info)
+#print(time_to_recovery_info)
 
 # more drawdown info
 worst_month = blo.valid_net_returns.idxmin()
@@ -329,7 +329,7 @@ final_risk_contribution = pd.DataFrame({"Asset": blo.asset_list,
 }).sort_values(by="% Contribution to Volatility", ascending=False)
 
 # Top 5 risk contributors - final rolling period
-print(final_risk_contribution.head(5).to_string(float_format="{:.4f}".format))
+#print(final_risk_contribution.head(5).to_string(float_format="{:.4f}".format))
 
 # Plot for the risk contributors - final rolling period
 
@@ -376,6 +376,30 @@ plt.xlabel("Asset")
 plt.ylabel("Rolling Period")
 plt.tight_layout()
 #plt.show()
+
+# Rolling Beta
+# Avoid issue with "ME", so variables are copied...
+
+portfolio_returns = blo.valid_net_returns.copy()
+benchmark_returns = blo.monthly_benchmark_returns.copy()
+portfolio_returns.index = portfolio_returns.index.to_period("M")
+benchmark_returns.index = benchmark_returns.index.to_period("M")
+
+aligned_return = pd.concat([portfolio_returns, benchmark_returns],axis=1,join="inner")
+aligned_return.columns = ["Portfolio", "Benchmark"]
+rolling_beta = aligned_return["Portfolio"].rolling(window=rolling_window,
+        min_periods=rolling_window).cov(aligned_return["Benchmark"]) / aligned_return["Benchmark"].rolling(
+            window=rolling_window, min_periods=rolling_window
+        ).var()
+#print(aligned_return.index)
+print(rolling_beta.dropna())
+
+# Rolling alpha - monthly and annualized
+risk_free_monthly = blo.risk_free["Risk_Free_Rate"].resample("ME").last()
+risk_free_monthly = (1 + risk_free_monthly) ** (1/rolling_window) - 1
+risk_free_monthly.index = risk_free_monthly.index.to_period("M")
+aligned_return_alpha = aligned_return.copy()
+
 
 
 
