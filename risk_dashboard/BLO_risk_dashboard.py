@@ -149,6 +149,14 @@ rolling_BLOcvar_99 = blo.valid_net_returns.rolling(window=rolling_window,min_per
     lambda x: historical_cvar(pd.Series(x), level=1), raw=False
 )
 
+# rolling historical VaR and CVaR (95%) for the rolling net returns
+rolling_tail_risk = pd.DataFrame({
+    "Rolling Historical VaR 95%": rolling_BLOvar_95,
+    "Rolling Historical CVaR 95%": rolling_BLOcvar_95
+})
+
+#print(rolling_tail_risk.dropna())
+
 # rolling annualized portfolio volatility
 rolling_portfolio_vol = blo.valid_net_returns.rolling(window=rolling_window,
  min_periods=rolling_window).std() * (rolling_window ** 0.5)
@@ -185,6 +193,17 @@ active_return = aligned_return["Portfolio"] - aligned_return["Benchmark"]
 # rolling tracking error
 rolling_tracking_error = active_return.rolling(window=rolling_window,
         min_periods=rolling_window).std() * (rolling_window**0.5)
+
+# rolling 12-month return, keeping in mind changing risk-adjusted ratios
+rolling_12month_return = blo.valid_net_returns.rolling(window=rolling_window,
+        min_periods=rolling_window).apply(lambda x: (1+x).prod()-1, raw=False)
+
+# worst month return
+worst_month = blo.valid_net_returns.idxmin()
+worst_month_return = blo.valid_net_returns.min()
+worst_month_info = pd.DataFrame({"Worst Month": [worst_month],
+                                 "Worst Month's Return": [worst_month_return]})
+print(worst_month_info)
 
 # wealth curve
 wealth_curve = initial_wealth * (1 + blo.valid_net_returns).cumprod()
@@ -271,8 +290,36 @@ if in_drawdown:
     worst_drawdown.append({"Peak Date": peak_date, "Trough Date": trough_date, "Recovery Date": "Unavailable",
             "Drawdown": trough_drawdown})
 
-five_worst_drawdown_periods = pd.DataFrame(worst_drawdown).sort_values(by="Drawdown")
+five_worst_drawdown_periods = pd.DataFrame(worst_drawdown).sort_values(by="Drawdown").head(5).reset_index(drop=True)
 #print(five_worst_drawdown_periods)
+
+# longest drawdown period
+longest_drawdown_length = 0
+current_drawdown_length = 0
+
+current_drawdown_start = None
+longest_drawdown_start = None
+longest_drawdown_end = None
+
+for date, drawdown in drawdowns.items():
+    if drawdown < 0:
+        if current_drawdown_length == 0:
+            current_drawdown_start = date
+        current_drawdown_length += 1
+
+        if current_drawdown_length > longest_drawdown_length:
+            longest_drawdown_length = current_drawdown_length
+            longest_drawdown_start = current_drawdown_start
+            longest_drawdown_end = date
+
+    else:
+        current_drawdown_length = 0
+        current_drawdown_start = None
+
+longest_drawdown_info = pd.DataFrame({"Metric": ["Longest Drawdown Length (Months)", "Longest Drawdown Start Date", "Longest Drawdown End Date"],
+    "Value": [longest_drawdown_length, longest_drawdown_start, longest_drawdown_end]})
+
+#print(longest_drawdown_info)
 
 # return histogram
 plt.hist(blo.valid_net_returns * 100, bins=25) # multiplying by 100 to get % monthly returns
@@ -392,7 +439,7 @@ rolling_beta = aligned_return["Portfolio"].rolling(window=rolling_window,
             window=rolling_window, min_periods=rolling_window
         ).var()
 #print(aligned_return.index)
-print(rolling_beta.dropna())
+#print(rolling_beta.dropna())
 
 # Rolling alpha - monthly and annualized
 risk_free_monthly = blo.risk_free["Risk_Free_Rate"].resample("ME").last()
@@ -400,19 +447,15 @@ risk_free_monthly = (1 + risk_free_monthly) ** (1/rolling_window) - 1
 risk_free_monthly.index = risk_free_monthly.index.to_period("M")
 aligned_return_alpha = aligned_return.copy()
 
-
-
-
-
-
-
-
 print('works')
-'''
-rolling_tail_risk = pd.DataFrame({
-    "Rolling Historical VaR 95%": rolling_BLOvar_95,
-    "Rolling Historical CVaR 95%": rolling_BLOcvar_95
-})
 
-print(rolling_tail_risk.tail())
-'''
+
+
+
+
+
+
+
+
+
+
