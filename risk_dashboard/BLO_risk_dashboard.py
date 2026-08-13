@@ -462,8 +462,8 @@ rolling_beta = aligned_return["Portfolio"].rolling(window=rolling_window,
 
 # annualized information ratio - active return per unit of tracking error
 rolling_information_ratio = (active_return.rolling(window=rolling_window,
-        min_periods=rolling_window).mean() / rolling_tracking_error) * np.sqrt(12)
-#print(rolling_information_ratio.dropna())
+        min_periods=rolling_window).mean() / rolling_tracking_error) * 100 * np.sqrt(12)
+print(rolling_information_ratio)
 
 rolling_up_capture_ratio = []
 rolling_down_capture_ratio = []
@@ -483,11 +483,16 @@ rolling_up_capture_ratio = pd.Series(rolling_up_capture_ratio,
         index=aligned_return.index[rolling_window - 1:])
 rolling_down_capture_ratio = pd.Series(rolling_down_capture_ratio, 
         index=aligned_return.index[rolling_window - 1:])
+#print(rolling_up_capture_ratio.dropna())
+#print(rolling_down_capture_ratio.dropna())
 
-print(rolling_up_capture_ratio.dropna())
-print(rolling_down_capture_ratio.dropna())
+rolling_relative_ratios = pd.DataFrame({
+    "Rolling Information Ratio (%)": rolling_information_ratio,
+    "Rolling Up-Capture Ratio (%)": rolling_up_capture_ratio,
+    "Rolling Down-Capture Ratio (%)": rolling_down_capture_ratio
+})
 
-
+#print(rolling_relative_ratios)
 
 
 # Rolling alpha - monthly and annualized
