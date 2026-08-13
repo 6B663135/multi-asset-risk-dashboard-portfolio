@@ -120,6 +120,24 @@ def excess_kurtosis(r):
 
     return exp / sigma_r ** 4 - 3
 
+# up-capture ratio (%)
+
+def up_capture_ratio(window):
+    up = window[window["Benchmark"] > 0]
+    if len(up) == 0:
+        return np.nan
+
+    return up["Portfolio"].mean() / up["Benchmark"].mean() * 100
+
+# down-capture ratio (%)
+
+def down_capture_ratio(window):
+    down = window[window["Benchmark"] < 0]
+    if len(down) == 0:
+        return np.nan
+
+    return down["Portfolio"].mean() / down["Benchmark"].mean() * 100
+
 # test to see if the code works (final rolling period)
 #BLOvar_95 = historical_var(blo.valid_net_returns,level=5)
 #BLOcvar_95 = historical_cvar(blo.valid_net_returns,level=5)
@@ -193,6 +211,7 @@ active_return = aligned_return["Portfolio"] - aligned_return["Benchmark"]
 # rolling tracking error
 rolling_tracking_error = active_return.rolling(window=rolling_window,
         min_periods=rolling_window).std() * (rolling_window**0.5)
+#print(rolling_tracking_error.dropna())
 
 # rolling 12-month return, keeping in mind changing risk-adjusted ratios
 rolling_12month_return = blo.valid_net_returns.rolling(window=rolling_window,
@@ -203,7 +222,7 @@ worst_month = blo.valid_net_returns.idxmin()
 worst_month_return = blo.valid_net_returns.min()
 worst_month_info = pd.DataFrame({"Worst Month": [worst_month],
                                  "Worst Month's Return": [worst_month_return]})
-print(worst_month_info)
+#print(worst_month_info)
 
 # wealth curve
 wealth_curve = initial_wealth * (1 + blo.valid_net_returns).cumprod()
@@ -440,6 +459,36 @@ rolling_beta = aligned_return["Portfolio"].rolling(window=rolling_window,
         ).var()
 #print(aligned_return.index)
 #print(rolling_beta.dropna())
+
+# annualized information ratio - active return per unit of tracking error
+rolling_information_ratio = (active_return.rolling(window=rolling_window,
+        min_periods=rolling_window).mean() / rolling_tracking_error) * np.sqrt(12)
+#print(rolling_information_ratio.dropna())
+
+rolling_up_capture_ratio = []
+rolling_down_capture_ratio = []
+
+for i in range(rolling_window - 1, len(aligned_return)):
+    window = aligned_return.iloc[i - rolling_window + 1:i + 1]
+    up = window[window["Benchmark"] > 0]
+    down = window[window["Benchmark"] < 0]
+
+    up_capture = up["Portfolio"].mean() / up["Benchmark"].mean() * 100 if len(up) > 0 else np.nan
+    down_capture = down["Portfolio"].mean() / down["Benchmark"].mean() * 100 if len(down) > 0 else np.nan
+
+    rolling_up_capture_ratio.append(up_capture)
+    rolling_down_capture_ratio.append(down_capture)
+
+rolling_up_capture_ratio = pd.Series(rolling_up_capture_ratio, 
+        index=aligned_return.index[rolling_window - 1:])
+rolling_down_capture_ratio = pd.Series(rolling_down_capture_ratio, 
+        index=aligned_return.index[rolling_window - 1:])
+
+print(rolling_up_capture_ratio.dropna())
+print(rolling_down_capture_ratio.dropna())
+
+
+
 
 # Rolling alpha - monthly and annualized
 risk_free_monthly = blo.risk_free["Risk_Free_Rate"].resample("ME").last()
