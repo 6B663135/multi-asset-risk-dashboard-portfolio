@@ -203,16 +203,6 @@ rolling_kurtosis = blo.valid_net_returns.rolling(window=rolling_window,min_perio
 aligned_return = pd.concat([blo.valid_net_returns, blo.valid_benchmark_returns],axis=1,join='inner')
 aligned_return.columns=["Portfolio","Benchmark"]
 
-rolling_correlation = aligned_return["Portfolio"].rolling(window=rolling_window,
-         min_periods=rolling_window).corr(aligned_return["Benchmark"])
-
-active_return = aligned_return["Portfolio"] - aligned_return["Benchmark"]
-
-# rolling tracking error
-rolling_tracking_error = active_return.rolling(window=rolling_window,
-        min_periods=rolling_window).std() * (rolling_window**0.5)
-#print(rolling_tracking_error.dropna())
-
 # rolling 12-month return, keeping in mind changing risk-adjusted ratios
 rolling_12month_return = blo.valid_net_returns.rolling(window=rolling_window,
         min_periods=rolling_window).apply(lambda x: (1+x).prod()-1, raw=False)
@@ -443,7 +433,6 @@ plt.ylabel("Rolling Period")
 plt.tight_layout()
 #plt.show()
 
-# Rolling Beta
 # Avoid issue with "ME", so variables are copied...
 
 portfolio_returns = blo.valid_net_returns.copy()
@@ -453,6 +442,8 @@ benchmark_returns.index = benchmark_returns.index.to_period("M")
 
 aligned_return = pd.concat([portfolio_returns, benchmark_returns],axis=1,join="inner")
 aligned_return.columns = ["Portfolio", "Benchmark"]
+
+# rolling beta
 rolling_beta = aligned_return["Portfolio"].rolling(window=rolling_window,
         min_periods=rolling_window).cov(aligned_return["Benchmark"]) / aligned_return["Benchmark"].rolling(
             window=rolling_window, min_periods=rolling_window
@@ -460,10 +451,20 @@ rolling_beta = aligned_return["Portfolio"].rolling(window=rolling_window,
 #print(aligned_return.index)
 #print(rolling_beta.dropna())
 
+active_return = aligned_return["Portfolio"] - aligned_return["Benchmark"]
+
+# rolling correlation
+rolling_correlation = aligned_return["Portfolio"].rolling(window=rolling_window,
+         min_periods=rolling_window).corr(aligned_return["Benchmark"])
+
+# rolling tracking error
+rolling_tracking_error = active_return.rolling(window=rolling_window,
+        min_periods=rolling_window).std() * (rolling_window**0.5)
+
 # annualized information ratio - active return per unit of tracking error
 rolling_information_ratio = (active_return.rolling(window=rolling_window,
         min_periods=rolling_window).mean() / rolling_tracking_error) * 100 * np.sqrt(12)
-print(rolling_information_ratio)
+#print(rolling_information_ratio)
 
 rolling_up_capture_ratio = []
 rolling_down_capture_ratio = []
@@ -491,9 +492,7 @@ rolling_relative_ratios = pd.DataFrame({
     "Rolling Up-Capture Ratio (%)": rolling_up_capture_ratio,
     "Rolling Down-Capture Ratio (%)": rolling_down_capture_ratio
 })
-
-#print(rolling_relative_ratios)
-
+#print(rolling_relative_ratios.dropna())
 
 # Rolling alpha - monthly and annualized
 risk_free_monthly = blo.risk_free["Risk_Free_Rate"].resample("ME").last()
@@ -501,12 +500,25 @@ risk_free_monthly = (1 + risk_free_monthly) ** (1/rolling_window) - 1
 risk_free_monthly.index = risk_free_monthly.index.to_period("M")
 aligned_return_alpha = aligned_return.copy()
 
+relative_wealth = portfolio_wealth_curve / benchmark_wealth_curve
+relative_peak = relative_wealth.cummax()
+relative_drawdown = (relative_wealth - relative_peak) / relative_peak
+
+rolling_relative_drawdown = relative_wealth.rolling(window=rolling_window, 
+        min_periods=rolling_window).apply(lambda x: (x.iloc[-1] - x.cummax().iloc[-1]) / x.cummax().iloc[-1],
+         raw=False)
+#print(rolling_relative_drawdown.dropna())
+
+rolling_max_relative_drawdown = relative_wealth.rolling(
+    window=rolling_window, min_periods=rolling_window).apply(lambda x: ((x - x.cummax()) / x.cummax()).min(),
+    raw=False)
+
+rolling_relative_drawdown = pd.DataFrame({
+    "Rolling Current Relative Drawdown": rolling_relative_drawdown,
+    "Rolling Max Relative Drawdown": rolling_max_relative_drawdown})
+
+print(rolling_relative_drawdown.dropna())
 print('works')
-
-
-
-
-
 
 
 
