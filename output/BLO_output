@@ -1,0 +1,241 @@
+import pandas as pd
+import numpy as np
+import math
+import os
+from scipy.optimize import minimize
+import scipy.stats as stats
+from pathlib import Path
+import sys
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# avoid traceback error
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+#import the black litterman portfolio python file
+import black_litterman.black_litterman_portfolio_12months_rolling as blo
+import risk_dashboard.BLO_risk_dashboard as blo_risk
+
+print('files imported successfully')
+
+# Exporting all important data to an Excel file for further analysis and visualization.
+# Charts and plots will be made manually, unless specified.
+
+OUTPUT_DIR = PROJECT_ROOT / "output"
+OUTPUT_DIR.mkdir(exist_ok=True)
+
+output_file = OUTPUT_DIR / "BLO_risk_dashboard.xlsx"
+
+with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
+    # rolling return/volatility sheet
+    rolling_return_volatility = pd.DataFrame({
+        "Rolling Return (%)": blo_risk.rolling_12month_return * 100,
+        "Rolling Volatility (%)": blo_risk.rolling_portfolio_vol * 100
+    }).dropna()
+    rolling_return_volatility.index.name = "Date"
+    rolling_return_volatility.to_excel(writer, sheet_name='Rolling Returns and Volatility', index=True)
+
+    # rolling historical VaR and CVaR sheet
+    rolling_var_cvar = pd.DataFrame({
+        "Rolling Historical VaR - 95% (%)": blo_risk.rolling_BLOvar_95 * 100,
+        "Rolling Historical CVaR - 95% (%)": blo_risk.rolling_BLOcvar_95 * 100,
+        "Rolling Historical VaR - 99% (%)": blo_risk.rolling_BLOvar_99 * 100,
+        "Rolling Historical CVaR - 99% (%)": blo_risk.rolling_BLOcvar_99 * 100
+    }).dropna()
+    rolling_var_cvar.index.name = "Date"
+    rolling_var_cvar.to_excel(writer, sheet_name='Rolling Historical VaR and CVaR', index=True)
+
+    # rolling ratios - sharpe, sortino, kurtosis, skewness
+    rolling_ratios_1 = pd.DataFrame({
+        "Rolling Sharpe Ratio": blo_risk.rolling_sharpe_ratio,
+        "Rolling Sortino Ratio": blo_risk.rolling_sortino_ratio,
+        "Rolling Kurtosis": blo_risk.rolling_kurtosis,
+        "Rolling Skewness": blo_risk.rolling_skewness,
+    }).dropna()
+    rolling_ratios_1.index.name = "Date"
+    rolling_ratios_1.to_excel(writer, sheet_name='Rolling Ratios 1', index=True)
+
+    # rolling ratios - information, up capture, down capture
+    rolling_ratios_2 = pd.DataFrame({
+        "Rolling Information Ratio": blo_risk.rolling_information_ratio,
+        "Rolling Up-Capture Ratio (%)": blo_risk.rolling_up_capture_ratio,
+        "Rolling Down-Capture Ratio (%)": blo_risk.rolling_down_capture_ratio
+    }).dropna()
+    rolling_ratios_2.index.name = "Date"
+    rolling_ratios_2.to_excel(writer, sheet_name='Rolling Ratios 2', index=True)
+
+    # wealth curve sheet
+    wealth_curves = pd.DataFrame({
+        "Portfolio Wealth": blo_risk.portfolio_wealth_curve,
+        "Benchmark Wealth": blo_risk.benchmark_wealth_curve
+    }).dropna()
+    wealth_curves.index.name = "Date"
+    wealth_curves.to_excel(writer, sheet_name='Wealth Curves', index=True)
+
+    # drawdown sheet
+    drawdown = pd.DataFrame({
+        "Drawdown (%)": blo_risk.drawdowns * 100
+    }).dropna()
+    drawdown.index.name = "Date"
+    drawdown.to_excel(writer, sheet_name='Drawdown', index=True)
+
+    # time to recovery sheet
+    time_to_recovery_info = pd.DataFrame({
+        "Metric": [
+            "Peak Before Drawdown Date",
+            "Max Drawdown Date",
+            "Max Drawdown (%)",
+            "Recovery Date",
+            "Time to Recovery (Months)"
+        ],
+        "Value": [
+            blo_risk.peak_before_drawdown_date,
+            blo_risk.max_drawdown_date,
+            blo_risk.max_drawdown,
+            blo_risk.recovery_date,
+            blo_risk.time_to_recovery
+        ]
+    })
+    time_to_recovery_info.index.name = "Date"
+    time_to_recovery_info.to_excel(writer, sheet_name='Time to Recovery', index=False)
+
+    # worst month sheet
+    worst_month_info = pd.DataFrame({
+        "Metric": [
+            "Worst Month Date",
+            "Worst Month Return (%)"
+        ],
+        "Value": [
+            blo_risk.worst_month,
+            blo_risk.worst_month_return * 100
+        ]
+    })
+    worst_month_info.index.name = "Date"
+    worst_month_info.to_excel(writer, sheet_name='Worst Month', index=False)
+
+    # 5 worst drawdown periods sheet
+    worst_drawdown_periods_info = blo_risk.five_worst_drawdown_periods.copy()
+    worst_drawdown_periods_info["Drawdown (%)"] = (worst_drawdown_periods_info["Drawdown"] * 100)
+    worst_drawdown_periods_info = worst_drawdown_periods_info.drop(columns=["Drawdown"])
+    worst_drawdown_periods_info.index.name = "Date"
+    worst_drawdown_periods_info.to_excel(writer, sheet_name='5 Worst Drawdown Periods', index=False)
+    
+
+    # longest drawdown period sheet
+    longest_drawdown_period_info = pd.DataFrame({
+        "Metric": ["Longest Drawdown Start Date", "Longest Drawdown End Date", "Longest Drawdown Duration (Months)"],
+        "Value": [blo_risk.longest_drawdown_start, blo_risk.longest_drawdown_end,
+                blo_risk.longest_drawdown_length]})
+    longest_drawdown_period_info.index.name = "Date"
+    longest_drawdown_period_info.to_excel(writer, sheet_name='Longest Drawdown Period', index=False)
+
+    # histogram chart
+    hist_returns = blo.valid_net_returns.dropna() * 100 # % units
+    counts, bins = np.histogram(hist_returns, bins=30)
+    histogram_data = pd.DataFrame({"Bin Start %": bins[:-1], "Bin End %": bins[1:], "Count": counts})
+    histogram_data["Bin Label"] = histogram_data.apply(lambda row: f"{row['Bin Start %']:.2f}% to {row['Bin End %']:.2f}%", 
+            axis=1)
+    histogram_data.to_excel(writer, sheet_name='Histogram Data', index=False)
+    hist_chartsheet = writer.book.add_worksheet("Histogram Return Chart")
+    hist_datasheet = writer.sheets['Histogram Data']
+    hist_chartsheet = writer.sheets['Histogram Return Chart']
+    chart = writer.book.add_chart({'type': 'column'})
+    chart.add_series({
+        'name': 'Frequency of Returns',
+        'categories': ['Histogram Data', 1, 3, len(histogram_data), 3],
+        'values': ['Histogram Data', 1, 2, len(histogram_data), 2],
+        'data_labels': {'value': True},
+        'gap' : 0,
+    })
+    '''
+    mean_return = hist_returns.mean() # to add a mean line to the histogram chart
+    mean_chart = writer.book.add_chart({'type': 'line'})
+    mean_chart.add_series({'name': 'Mean Return', 'categories': ['Histogram Data', 1, 3, len(histogram_data), 3],
+        'values': ["Histogram Data", 1, 4, len(histogram_data), 4],
+        'line': {'color': 'red', 'width': 10},})
+    chart.combine(mean_chart)
+    '''
+    chart.set_title({"name": "Portfolio Net Return Histogram"})
+    chart.set_x_axis({"name": "Monthly Net Return (%)"})
+    chart.set_y_axis({"name": "Frequency"})
+    chart.set_legend({"none": True})
+    hist_chartsheet.insert_chart('A1', chart, {'x_scale': 2, 'y_scale': 2})
+
+    #Q-Q plot sheet
+    qq_plot = stats.probplot(blo.valid_net_returns.dropna(), dist="norm", plot=plt)
+    theoretical_quantiles = qq_plot[0][0]
+    ordered_returns = qq_plot[0][1] * 100  # convert to percentage
+    qq_data = pd.DataFrame({"Theoretical Quantiles": theoretical_quantiles, 
+        "Ordered Returns (%)": ordered_returns})
+    qq_data.to_excel(writer, sheet_name='Q-Q Plot Data', index=False)
+
+    #Q-Q plot chart
+    qq_chartsheet = writer.book.add_worksheet("Q-Q Plot Chart")
+    writer.sheets['Q-Q Plot Data'] = qq_data
+    qq_chart = writer.book.add_chart({'type': 'scatter', 'subtype': 'straight_with_markers'})
+    qq_chart.add_series({ 'name': 'Q-Q Plot', 'categories': ['Q-Q Plot Data', 1, 0, len(qq_data), 0],
+        'values': ['Q-Q Plot Data', 1, 1, len(qq_data), 1], 'marker': {'type': 'circle', 'size': 3}, })
+    qq_chart.set_title({"name": "Q-Q Plot of Portfolio Net Returns"})
+    qq_chart.set_x_axis({"name": "Theoretical Quantiles", "crossing": "min"})
+    qq_chart.set_y_axis({"name": "Ordered Returns (%)", "crossing": "min"})
+    qq_chart.set_legend({"none": True})
+
+    qq_chartsheet.insert_chart('A1', qq_chart, {'x_scale': 2, 'y_scale': 2})
+
+    # rolling portfolio weights sheet
+    rolling_weights = blo_risk.rolling_blo_weights.copy()
+    rolling_weights.index.name = "Date"
+    rolling_weights.to_excel(writer, sheet_name='Rolling Portfolio Weights', index=True)
+    rolling_weights_sheet = writer.sheets['Rolling Portfolio Weights']
+
+    roll_row, roll_col = rolling_weights.shape # code to add conditional formatting to the rolling weights sheet.
+    rolling_weights_sheet.conditional_format(1, 1, roll_row, roll_col - 1, {'type': '3_color_scale',
+        'min_color': "#FF0000",  # Red
+        'mid_color': "#FFFF00",  # Yellow
+        'max_color': "#00FF00"   # Green
+    })
+
+    # final risk contribution sheet
+    final_risk_contribution = blo_risk.final_risk_contribution.copy()
+    final_risk_contribution.index.name = "Asset"
+    final_risk_contribution.to_excel(writer, sheet_name='Final Risk Contribution', index=True)
+
+    # final risk contribution chart
+    final_risk_chartsheet = writer.book.add_worksheet("Final Risk Contribution Chart")
+    final_risk_chart = writer.book.add_chart({'type': 'column'})
+    final_risk_chart.add_series({
+        'name': 'Final Risk Contribution',
+        'categories': ['Final Risk Contribution', 1, 1, len(final_risk_contribution), 1],
+        'values': ['Final Risk Contribution', 1, 5, len(final_risk_contribution), 5],
+        'data_labels': {'value': True, 'num_format': '0.00'},
+        'gap' : 5,
+    })
+    final_risk_chart.set_title({"name": "Final Risk Contribution by Asset"})
+    final_risk_chart.set_x_axis({"name": "Asset"})
+    final_risk_chart.set_y_axis({"name": "% Contribution to Volatility", 'num_format': '0.00'})
+    final_risk_chart.set_legend({"none": True})
+    final_risk_chartsheet.insert_chart('A1', final_risk_chart, {'x_scale': 2, 'y_scale': 2})
+
+    # rolling beta and alpha sheet
+    rolling_beta_alpha = pd.DataFrame({
+        "Rolling Beta": blo_risk.rolling_beta.dropna(),
+        "Rolling Alpha - Annualized (%)": blo_risk.rolling_alpha_annualized.dropna() * 100
+    })
+    rolling_beta_alpha.index.name = "Date"
+    rolling_beta_alpha.to_excel(writer, sheet_name='Rolling Beta and Alpha', index=True)
+
+
+
+
+
+
+
+
+    
+
+
+    
+print('works')

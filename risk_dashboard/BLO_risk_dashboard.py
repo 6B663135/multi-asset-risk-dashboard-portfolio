@@ -200,8 +200,13 @@ rolling_kurtosis = blo.valid_net_returns.rolling(window=rolling_window,min_perio
 )
 
 # rolling correlation (with benchmark)
-aligned_return = pd.concat([blo.valid_net_returns, blo.valid_benchmark_returns],axis=1,join='inner')
-aligned_return.columns=["Portfolio","Benchmark"]
+portfolio_returns = blo.valid_net_returns.copy()
+benchmark_returns = blo.monthly_benchmark_returns.copy()
+portfolio_returns.index = portfolio_returns.index.to_period("M")
+benchmark_returns.index = benchmark_returns.index.to_period("M")
+
+aligned_return = pd.concat([portfolio_returns, benchmark_returns],axis=1,join="inner")
+aligned_return.columns = ["Portfolio", "Benchmark"]
 
 # rolling 12-month return, keeping in mind changing risk-adjusted ratios
 rolling_12month_return = blo.valid_net_returns.rolling(window=rolling_window,
@@ -221,7 +226,7 @@ portfolio_wealth_curve = initial_wealth * (1 + aligned_return["Portfolio"]).cump
 
 wealth_curves = pd.DataFrame({"Portfolio Wealth": portfolio_wealth_curve, 
                               "Benchmark Wealth": benchmark_wealth_curve})
-
+#print(wealth_curves)
 
 # drawdown
 previous_peak = wealth_curve.cummax()
@@ -250,7 +255,7 @@ time_to_recovery_info = pd.DataFrame({"Metric" : [
     ],"Value": [peak_before_drawdown_date,max_drawdown_date,max_drawdown,recovery_date,
                 time_to_recovery] })
 
-#print(time_to_recovery_info)
+print(time_to_recovery_info)
 
 # more drawdown info
 worst_month = blo.valid_net_returns.idxmin()
@@ -300,7 +305,7 @@ if in_drawdown:
             "Drawdown": trough_drawdown})
 
 five_worst_drawdown_periods = pd.DataFrame(worst_drawdown).sort_values(by="Drawdown").head(5).reset_index(drop=True)
-#print(five_worst_drawdown_periods)
+print(five_worst_drawdown_periods)
 
 # longest drawdown period
 longest_drawdown_length = 0
@@ -379,9 +384,9 @@ percent_contribution = component_contribution / final_portfolio_vol
 
 final_risk_contribution = pd.DataFrame({"Asset": blo.asset_list,
     "Weight": final_blo_weights,
-    "Marginal Contribution to Risk": marginal_contribution,
-    "Component Contribution to Risk": component_contribution,
-    "% Contribution to Volatility": percent_contribution
+    "Marginal Contribution to Risk (%)": marginal_contribution * 100,
+    "Component Contribution to Risk (%)": component_contribution * 100,
+    "% Contribution to Volatility": percent_contribution * 100
 }).sort_values(by="% Contribution to Volatility", ascending=False)
 
 # Top 5 risk contributors - final rolling period
@@ -391,7 +396,7 @@ final_risk_contribution = pd.DataFrame({"Asset": blo.asset_list,
 
 plt.figure(figsize=(12,6))
 plt.bar(final_risk_contribution["Asset"],
-        final_risk_contribution["% Contribution to Volatility"] * 100)
+        final_risk_contribution["% Contribution to Volatility"])
 plt.title("Final Risk Contribution by Asset")
 plt.xlabel("Asset")
 plt.ylabel("% Contribution to Volatility")
@@ -434,7 +439,7 @@ plt.tight_layout()
 #plt.show()
 
 # Avoid issue with "ME", so variables are copied...
-
+'''
 portfolio_returns = blo.valid_net_returns.copy()
 benchmark_returns = blo.monthly_benchmark_returns.copy()
 portfolio_returns.index = portfolio_returns.index.to_period("M")
@@ -442,6 +447,7 @@ benchmark_returns.index = benchmark_returns.index.to_period("M")
 
 aligned_return = pd.concat([portfolio_returns, benchmark_returns],axis=1,join="inner")
 aligned_return.columns = ["Portfolio", "Benchmark"]
+'''
 
 # rolling beta
 rolling_beta = aligned_return["Portfolio"].rolling(window=rolling_window,
@@ -499,6 +505,15 @@ risk_free_monthly = blo.risk_free["Risk_Free_Rate"].resample("ME").last()
 risk_free_monthly = (1 + risk_free_monthly) ** (1/rolling_window) - 1
 risk_free_monthly.index = risk_free_monthly.index.to_period("M")
 aligned_return_alpha = aligned_return.copy()
+aligned_alpha_data = pd.concat([aligned_return_alpha, risk_free_monthly], axis=1, join="inner")
+
+portfolio_excess_return = aligned_alpha_data["Portfolio"] - aligned_alpha_data["Risk_Free_Rate"]
+benchmark_excess_return = aligned_alpha_data["Benchmark"] - aligned_alpha_data["Risk_Free_Rate"]
+
+rolling_alpha_monthly = portfolio_excess_return.rolling(window=rolling_window,
+        min_periods=rolling_window).mean() - rolling_beta * benchmark_excess_return.rolling(window=rolling_window,
+        min_periods=rolling_window).mean()
+rolling_alpha_annualized = (1 + rolling_alpha_monthly) ** rolling_window - 1
 
 relative_wealth = portfolio_wealth_curve / benchmark_wealth_curve
 relative_peak = relative_wealth.cummax()
@@ -517,8 +532,8 @@ rolling_relative_drawdown = pd.DataFrame({
     "Rolling Current Relative Drawdown": rolling_relative_drawdown,
     "Rolling Max Relative Drawdown": rolling_max_relative_drawdown})
 
-print(rolling_relative_drawdown.dropna())
-print('works')
+#print(rolling_relative_drawdown.dropna())
+#print('works')
 
 
 
