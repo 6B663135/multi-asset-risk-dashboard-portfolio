@@ -30,6 +30,75 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 output_file = OUTPUT_DIR / "BLO_risk_dashboard.xlsx"
 
 with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
+
+    # summary sheet (includes final values for all relevant info)
+    summary_metrics = pd.DataFrame({
+    "Metric": [
+        "Final Cumulative Net Return (%)",
+        "Final Annualized Return (%)",
+        "Final Annualized Volatility (%)",
+        "Final Sharpe Ratio",
+        "Final Sortino Ratio",
+        "Historical VaR 95% (%)",
+        "Historical CVaR 95% (%)",
+        "Latest Beta",
+        "Latest Monthly Alpha (%)",
+        "Latest Annualized Alpha (%)",
+        "Latest Correlation",
+        "Latest Tracking Error (%)",
+        "Latest Information Ratio",
+        "Latest Up-Capture Ratio (%)",
+        "Latest Down-Capture Ratio (%)",
+        "Final Skewness",
+        "Final Kurtosis",
+        "Final Excess Kurtosis",
+        "Final Max Drawdown (%)",
+        "Final Current Drawdown (%)",
+        "Final Worst Month Return (%)",
+        "Final Time to Recovery (Months)",
+        "Final Longest Drawdown Length (Months)"
+    ],
+    "Value": [
+        blo_risk.final_cumulative_net_return * 100,
+        blo_risk.final_annualized_return * 100,
+        blo_risk.final_annualized_vol * 100,
+        blo_risk.final_sharpe_ratio,
+        blo_risk.final_sortino_ratio,
+        blo_risk.final_historical_var_95 * 100,
+        blo_risk.final_historical_cvar_95 * 100,
+        blo_risk.latest_beta,
+        blo_risk.latest_alpha_monthly * 100,
+        blo_risk.latest_alpha_annualized * 100,
+        blo_risk.latest_correlation,
+        blo_risk.latest_tracking_error * 100,
+        blo_risk.latest_information_ratio,
+        blo_risk.latest_up_capture_ratio,
+        blo_risk.latest_down_capture_ratio,
+        blo_risk.final_skewness,
+        blo_risk.final_kurtosis,
+        blo_risk.final_excess_kurtosis,
+        blo_risk.final_max_drawdown * 100,
+        blo_risk.final_current_drawdown * 100,
+        blo_risk.final_worst_month_return * 100,
+        blo_risk.final_time_to_recovery,
+        blo_risk.final_longest_drawdown_length
+    ]})
+    summary_metrics.to_excel(writer, sheet_name = "Summary Metrics", startrow = 2, index=False)
+    workbook = writer.book
+    summary_sheet = writer.sheets["Summary Metrics"]
+
+    title_format = workbook.add_format({"bold": True, "font_size": 14, "font_color": "white",
+        "bg_color": "#1F4E78", "align": "center", "valign" : "center"})
+    header_format = workbook.add_format({"bold": True, "bg_color": "D9EAF7", "border": 1, "align": "center"})
+    value_format = workbook.add_format({"border": 1, "num_format": "0.00", "align": "right"})
+    metric_format = workbook.add_format({"border": 1, "align": "left"})
+    summary_sheet.merge_range("A1:B1", "Black-Litterman Portfolio Summary Metrics", title_format)
+
+    summary_sheet.write("A3", "Metric", header_format)
+    summary_sheet.write("B3", "Value", header_format)
+    summary_sheet.set_column("A:A", 38, metric_format)
+    summary_sheet.set_column("B:B", 24, value_format)
+
     # rolling return/volatility sheet
     rolling_return_volatility = pd.DataFrame({
         "Rolling Return (%)": blo_risk.rolling_12month_return * 100,
@@ -83,6 +152,25 @@ with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
     wealth_curves.index.name = "Date"
     wealth_curves.to_excel(writer, sheet_name='Wealth Curves', index=True)
 
+    # wealth curve chart
+    wealth_curves_chartsheet = writer.book.add_worksheet("Wealth Curves Chart")
+    wealth_curve_chart = writer.book.add_chart({"type": "line"})
+    wealth_curve_chart.add_series({"name": "Portfolio Wealth",
+        "categories": ["Wealth Curves", 1, 0, len(wealth_curves), 0], 
+        "values": ["Wealth Curves", 1, 1, len(wealth_curves), 1],
+        "line": {"color": "#1F77B4", "width": 2.5}})
+    wealth_curve_chart.add_series({
+        "name": "Benchmark Wealth",
+        "categories": ["Wealth Curves", 1, 0, len(wealth_curves), 0],
+        "values": ["Wealth Curves", 1, 2, len(wealth_curves), 2],
+        "line": {"color": "#FF7F0E", "width": 2.5},
+    })
+    wealth_curve_chart.set_title({"name": "Portfolio vs Benchmark Wealth curve"})
+    wealth_curve_chart.set_x_axis({"name": "Date", "date_axis": True, "num_format": "mmm-yy"})
+    wealth_curve_chart.set_y_axis({"name": "Wealth ($)", "num_format": "$#,##0.00"})
+    wealth_curve_chart.set_legend({"position": "bottom"})
+    wealth_curves_chartsheet.insert_chart("A1", wealth_curve_chart, {"x_scale": 2, "y_scale": 2})
+    
     # drawdown sheet
     drawdown = pd.DataFrame({
         "Drawdown (%)": blo_risk.drawdowns * 100
@@ -242,61 +330,13 @@ with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
     rolling_beta_alpha.index.name = "Date"
     rolling_beta_alpha.to_excel(writer, sheet_name='Rolling Beta and Alpha', index=True)
 
-    # summary sheet (includes final values for all relevant info)
-    summary_metrics = pd.DataFrame({
-    "Metric": [
-        "Final Cumulative Net Return (%)",
-        "Final Annualized Return (%)",
-        "Final Annualized Volatility (%)",
-        "Final Sharpe Ratio",
-        "Final Sortino Ratio",
-        "Historical VaR 95% (%)",
-        "Historical CVaR 95% (%)",
-        "Latest Beta",
-        "Latest Monthly Alpha (%)",
-        "Latest Annualized Alpha (%)",
-        "Latest Correlation",
-        "Latest Tracking Error (%)",
-        "Latest Information Ratio",
-        "Latest Up-Capture Ratio (%)",
-        "Latest Down-Capture Ratio (%)",
-        "Final Skewness",
-        "Final Kurtosis",
-        "Final Excess Kurtosis",
-        "Final Max Drawdown (%)",
-        "Final Current Drawdown (%)",
-        "Final Worst Month Return (%)",
-        "Final Time to Recovery (Months)",
-        "Final Longest Drawdown Length (Months)"
-    ],
-    "Value": [
-        blo_risk.final_cumulative_net_return * 100,
-        blo_risk.final_annualized_return * 100,
-        blo_risk.final_annualized_vol * 100,
-        blo_risk.final_sharpe_ratio,
-        blo_risk.final_sortino_ratio,
-        blo_risk.final_historical_var_95 * 100,
-        blo_risk.final_historical_cvar_95 * 100,
-        blo_risk.latest_beta,
-        blo_risk.latest_alpha_monthly * 100,
-        blo_risk.latest_alpha_annualized * 100,
-        blo_risk.latest_correlation,
-        blo_risk.latest_tracking_error * 100,
-        blo_risk.latest_information_ratio,
-        blo_risk.latest_up_capture_ratio,
-        blo_risk.latest_down_capture_ratio,
-        blo_risk.final_skewness,
-        blo_risk.final_kurtosis,
-        blo_risk.final_excess_kurtosis,
-        blo_risk.final_max_drawdown * 100,
-        blo_risk.final_current_drawdown * 100,
-        blo_risk.final_worst_month_return * 100,
-        blo_risk.final_time_to_recovery,
-        blo_risk.final_longest_drawdown_length
-    ]})
-    summary_metrics.to_excel(writer, sheet_name = "Summary Metrics", startrow = 2, index=False)
-    workbook = writer.book
-    summary_sheet = writer.sheets["Summary Metrics"]
+    # verification section
+    print("Portfolio:", blo_risk.portfolio_wealth_curve.iloc[-1])
+    print("Benchmark:", blo_risk.benchmark_wealth_curve.iloc[-1])
+    
+
+
+
     
 
 

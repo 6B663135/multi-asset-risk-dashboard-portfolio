@@ -255,7 +255,7 @@ time_to_recovery_info = pd.DataFrame({"Metric" : [
     ],"Value": [peak_before_drawdown_date,max_drawdown_date,max_drawdown,recovery_date,
                 time_to_recovery] })
 
-print(time_to_recovery_info)
+#print(time_to_recovery_info)
 
 # more drawdown info
 worst_month = blo.valid_net_returns.idxmin()
@@ -305,7 +305,7 @@ if in_drawdown:
             "Drawdown": trough_drawdown})
 
 five_worst_drawdown_periods = pd.DataFrame(worst_drawdown).sort_values(by="Drawdown").head(5).reset_index(drop=True)
-print(five_worst_drawdown_periods)
+#print(five_worst_drawdown_periods)
 
 # longest drawdown period
 longest_drawdown_length = 0
