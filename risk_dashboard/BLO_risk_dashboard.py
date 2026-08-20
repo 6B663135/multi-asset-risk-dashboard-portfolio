@@ -532,6 +532,38 @@ rolling_relative_drawdown = pd.DataFrame({
     "Rolling Current Relative Drawdown": rolling_relative_drawdown,
     "Rolling Max Relative Drawdown": rolling_max_relative_drawdown})
 
+
+# final values which will then be exported to the BLO output excel file
+final_cumulative_net_return = blo.final_cumulative_net_BLO_return
+final_annualized_return = annualize_rets(blo.valid_net_returns, rolling_window)
+final_annualized_vol = annualize_vol(blo.valid_net_returns, rolling_window)
+final_sharpe_ratio = sharpe_ratio(blo.valid_net_returns, blo.risk_free["Risk_Free_Rate"].iloc[-1], rolling_window)
+final_sortino_ratio = sortino_ratio(blo.valid_net_returns, blo.risk_free["Risk_Free_Rate"].iloc[-1], rolling_window)
+final_historical_var_95 = historical_var(blo.valid_net_returns, level=5)
+final_historical_cvar_95 = historical_cvar(blo.valid_net_returns, level=5)
+latest_beta = rolling_beta.dropna().iloc[-1]
+latest_alpha_monthly = rolling_alpha_monthly.dropna().iloc[-1]
+latest_alpha_annualized = rolling_alpha_annualized.dropna().iloc[-1]
+latest_correlation = rolling_correlation.dropna().iloc[-1]
+latest_tracking_error = rolling_tracking_error.dropna().iloc[-1]
+latest_information_ratio = rolling_information_ratio.dropna().iloc[-1]
+latest_up_capture_ratio = rolling_up_capture_ratio.dropna().iloc[-1]
+latest_down_capture_ratio = rolling_down_capture_ratio.dropna().iloc[-1]
+final_skewness = skewness(blo.valid_net_returns)
+final_kurtosis = kurtosis(blo.valid_net_returns)
+final_excess_kurtosis = excess_kurtosis(blo.valid_net_returns)
+final_max_drawdown = max_drawdown
+final_current_drawdown = current_drawdown
+final_worst_month_return = worst_month_return
+final_time_to_recovery = time_to_recovery
+final_longest_drawdown_length = longest_drawdown_length
+
+
+
+
+
+
+
 #print(rolling_relative_drawdown.dropna())
 #print('works')
 

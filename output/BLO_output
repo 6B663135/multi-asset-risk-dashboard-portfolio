@@ -38,6 +38,14 @@ with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
     rolling_return_volatility.index.name = "Date"
     rolling_return_volatility.to_excel(writer, sheet_name='Rolling Returns and Volatility', index=True)
 
+    # rolling correlation and tracking error sheet
+    rolling_corr_tracking = pd.DataFrame({
+        "Rolling Correlation": blo_risk.rolling_correlation,
+        "Rolling Tracking Error (%)": blo_risk.rolling_tracking_error * 100
+    }).dropna()
+    rolling_corr_tracking.index.name = "Date"
+    rolling_corr_tracking.to_excel(writer, sheet_name='Rolling Corr. and Track. Error', index=True)
+
     # rolling historical VaR and CVaR sheet
     rolling_var_cvar = pd.DataFrame({
         "Rolling Historical VaR - 95% (%)": blo_risk.rolling_BLOvar_95 * 100,
@@ -82,6 +90,12 @@ with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
     drawdown.index.name = "Date"
     drawdown.to_excel(writer, sheet_name='Drawdown', index=True)
 
+    # rolling drawdown sheet
+    rolling_drawdown = blo_risk.rolling_relative_drawdown.copy() * 100
+    rolling_drawdown = rolling_drawdown.dropna()
+    rolling_drawdown.index.name = "Date"
+    rolling_drawdown.to_excel(writer, sheet_name='Rolling Drawdown', index=True)
+    
     # time to recovery sheet
     time_to_recovery_info = pd.DataFrame({
         "Metric": [
@@ -222,10 +236,69 @@ with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
     # rolling beta and alpha sheet
     rolling_beta_alpha = pd.DataFrame({
         "Rolling Beta": blo_risk.rolling_beta.dropna(),
+        "Rolling Alpha - Monthly (%)": blo_risk.rolling_alpha_monthly.dropna() * 100,
         "Rolling Alpha - Annualized (%)": blo_risk.rolling_alpha_annualized.dropna() * 100
     })
     rolling_beta_alpha.index.name = "Date"
     rolling_beta_alpha.to_excel(writer, sheet_name='Rolling Beta and Alpha', index=True)
+
+    # summary sheet (includes final values for all relevant info)
+    summary_metrics = pd.DataFrame({
+    "Metric": [
+        "Final Cumulative Net Return (%)",
+        "Final Annualized Return (%)",
+        "Final Annualized Volatility (%)",
+        "Final Sharpe Ratio",
+        "Final Sortino Ratio",
+        "Historical VaR 95% (%)",
+        "Historical CVaR 95% (%)",
+        "Latest Beta",
+        "Latest Monthly Alpha (%)",
+        "Latest Annualized Alpha (%)",
+        "Latest Correlation",
+        "Latest Tracking Error (%)",
+        "Latest Information Ratio",
+        "Latest Up-Capture Ratio (%)",
+        "Latest Down-Capture Ratio (%)",
+        "Final Skewness",
+        "Final Kurtosis",
+        "Final Excess Kurtosis",
+        "Final Max Drawdown (%)",
+        "Final Current Drawdown (%)",
+        "Final Worst Month Return (%)",
+        "Final Time to Recovery (Months)",
+        "Final Longest Drawdown Length (Months)"
+    ],
+    "Value": [
+        blo_risk.final_cumulative_net_return * 100,
+        blo_risk.final_annualized_return * 100,
+        blo_risk.final_annualized_vol * 100,
+        blo_risk.final_sharpe_ratio,
+        blo_risk.final_sortino_ratio,
+        blo_risk.final_historical_var_95 * 100,
+        blo_risk.final_historical_cvar_95 * 100,
+        blo_risk.latest_beta,
+        blo_risk.latest_alpha_monthly * 100,
+        blo_risk.latest_alpha_annualized * 100,
+        blo_risk.latest_correlation,
+        blo_risk.latest_tracking_error * 100,
+        blo_risk.latest_information_ratio,
+        blo_risk.latest_up_capture_ratio,
+        blo_risk.latest_down_capture_ratio,
+        blo_risk.final_skewness,
+        blo_risk.final_kurtosis,
+        blo_risk.final_excess_kurtosis,
+        blo_risk.final_max_drawdown * 100,
+        blo_risk.final_current_drawdown * 100,
+        blo_risk.final_worst_month_return * 100,
+        blo_risk.final_time_to_recovery,
+        blo_risk.final_longest_drawdown_length
+    ]})
+    summary_metrics.to_excel(writer, sheet_name = "Summary Metrics", startrow = 2, index=False)
+    workbook = writer.book
+    summary_sheet = writer.sheets["Summary Metrics"]
+    
+
 
 
 
