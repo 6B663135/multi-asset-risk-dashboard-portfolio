@@ -469,7 +469,7 @@ rolling_tracking_error = active_return.rolling(window=rolling_window,
 
 # annualized information ratio - active return per unit of tracking error
 rolling_information_ratio = (active_return.rolling(window=rolling_window,
-        min_periods=rolling_window).mean() / rolling_tracking_error) * 100 * np.sqrt(12)
+        min_periods=rolling_window).mean() / rolling_tracking_error) * np.sqrt(12)
 #print(rolling_information_ratio)
 
 rolling_up_capture_ratio = []
